@@ -80,7 +80,7 @@ nombreArchivo = 'taxis.txt'
 arrayTaxis = []
 
 for item in arrayPos:                                                       # Coge solo los taxis del tablero que nos habian pasado
-    if item['id'].isdigit():
+    if item['id'].isdigit():                                                # Seleccionar los taxis del mapa : )
         arrayTaxis.append(item)
 
 
