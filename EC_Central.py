@@ -8,9 +8,11 @@ import threading
 
 HEADER = 64
 FORMAT = 'utf-8'
+
 if len(sys.argv) != 4:
-    print("ERROR: Numero de argumentos erroneo")
+    print("ERROR: Número de argumentos arróneos")    
     exit()
+
 argumentos = sys.argv
 PUERTO_ESCUCHA = argumentos[1]
 IP_GESTOR = argumentos[2]
