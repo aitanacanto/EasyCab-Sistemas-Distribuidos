@@ -14,19 +14,21 @@ if len(sys.argv) != 4:
     exit()
 
 argumentos = sys.argv
-PUERTO_ESCUCHA = argumentos[1]
+PUERTO_ESCUCHA = int(argumentos[1])
 IP_GESTOR = argumentos[2]
-PUERTO_GESTOR = argumentos[3]
+PUERTO_GESTOR = int(argumentos[3])
 ANCHO = 20
 ALTO = 20
 MAX_CONEXIONES = 22
 SERVER = socket.gethostbyname(socket.gethostname())
 FIN = "<FIN>"
+DIRECCION = (SERVER, PUERTO_ESCUCHA)
 
 ############ FUNCIONES #############
 
-def clienteNuevo(conn, addr):
-    print(f"[NUEVA CONEXION] {addr} connected")
+def gestorTaxi(conn, addr):
+    print(f"[NUEVA CONEXION] {conn} CONECTADO")
+
     conectado = True
     while conectado:
         msg_length = conn.recv(HEADER).decode(FORMAT)
@@ -34,22 +36,20 @@ def clienteNuevo(conn, addr):
             msg_length = int(msg_length)
             msg = conn.recv(msg_length).decode(FORMAT)
             if msg == FIN:
-                connected = False
+                conectado = False
             print(f" He recibido del cliente [{addr}] el mensaje: {msg}")
             conn.send(f"HOLA CLIENTE: He recibido tu mensaje: {msg} ".encode(FORMAT))
     print("ADIOS. TE ESPERO EN OTRA OCASION")
     conn.close()
 
-def start():
+def startTaxi(server):
     server.listen()
     print(f"[ESCUCHANDO] Servidor a la escucha en {SERVER}")
-    CONEX_ACTIVAS = threading.active_count()-1
-    print(CONEX_ACTIVAS)
     while True:
         conn, addr = server.accept()
-        CONEX_ACTIVAS = threading.active_count()
+        CONEX_ACTIVAS = threading.active_count() - 1
         if(CONEX_ACTIVAS <= MAX_CONEXIONES):
-            thread = threading.Thread(target=clienteNuevo, args=(conn, addr))
+            thread = threading.Thread(target=gestorTaxi, args=(conn, addr))
             thread.start()
             print(f"[CONEXIONES ACTIVAS] {CONEX_ACTIVAS}")
             print("CONEXIONES RESTANTES PARA CERRAR EL SERVICIO", MAX_CONEXIONES-CONEX_ACTIVAS)
@@ -57,7 +57,12 @@ def start():
             print("OOppsss... DEMASIADAS CONEXIONES. ESPERANDO A QUE ALGUIEN SE VAYA")
             conn.send("OOppsss... DEMASIADAS CONEXIONES. Tendrás que esperar a que alguien se vaya".encode(FORMAT))
             conn.close()
-            CONEX_ACTIVAS = threading.active_count()-1
+
+def conexionTaxi():
+
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind(DIRECCION)
+    startTaxi(server)
 
 ############### MAIN ###############
 
@@ -90,14 +95,12 @@ with open(nombreArchivo, 'w') as archivo:                                   # Gu
     for item in arrayTaxis:
         archivo.write(f"<{item['id']}><{item['x']}><{item['y']}>\n")
 
-DIRECCION = (SERVER, PUERTO_ESCUCHA)
-
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.bind(DIRECCION)
 
 print("[EMPEZANDO] Servidor inicializando...")
 
-start()
+# Creamos el hilo para los Taxis y la ejecutamos
+hiloTaxi = threading.Thread(target=conexionTaxi)
+hiloTaxi.start()
 
 
-
+hiloTaxi.join()
