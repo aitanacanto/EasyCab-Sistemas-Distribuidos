@@ -44,10 +44,14 @@ def conexionSensor():
     print("Conexión hecha con Sensor en " + str(addr))
 
     while True:
-        mensaje = conexion.recv(4096)
-        if not mensaje:
+        try:
+            mensaje = conexion.recv(4096)
+            if not mensaje:
+                break
+            print("Mensaje Sensor entrante: [" + mensaje.decode() + "]")
+    
+        except Exception as e:
             break
-        print("Mensaje Sensor entrante: [" + mensaje.decode() + "]")
 
     conexion.close()
     socketSensor.close()
@@ -88,6 +92,7 @@ hiloCentral.start()
 hiloSensor.join()
 
 # @descomentar
-#hiloCentral.join()
-
+"""
+hiloCentral.join()
+"""
 

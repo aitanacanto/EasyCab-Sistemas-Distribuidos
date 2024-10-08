@@ -58,6 +58,11 @@ def teclaW_detectada(event):
         hilo_envio = threading.Thread(target=enviarMensajes)
         hilo_envio.start()
 
+def finalTransmision(event):
+    global stop
+    stop = True
+    print("SE HA AVABADO LA TRANSMISIÓN")
+    exit()
 
 ############## MAIN ################
 global stop
@@ -69,6 +74,7 @@ root.geometry("400x300")
 
 # Detectar cuando se toque la tecla S
 root.bind('<s>', teclaW_detectada)
+root.bind('<q>', finalTransmision)
 
 # Conectar al Digital Engine
 conectarDigitalEngine()
@@ -80,4 +86,6 @@ hilo_envio.start()
 
 # Iniciar el bucle principal de la aplicación
 root.mainloop()
+
+hilo_envio.join()
 
