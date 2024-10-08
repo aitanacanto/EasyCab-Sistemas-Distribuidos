@@ -15,8 +15,13 @@ if len(sys.argv) != 4:
 
 argumentos = sys.argv
 PUERTO_ESCUCHA = int(argumentos[1])
+
+# @descomentar
+"""
 IP_GESTOR = argumentos[2]
 PUERTO_GESTOR = int(argumentos[3])
+"""
+
 ANCHO = 20
 ALTO = 20
 MAX_CONEXIONES = 22
@@ -66,6 +71,8 @@ def conexionTaxi():
 
 ############### MAIN ###############
 
+# @descomentar
+"""
 arrayPos = []
 
 with open('mapa.txt', 'r') as archivo:                                      # Lee la informacion sobre las posiciones del mapa
@@ -94,6 +101,8 @@ for item in arrayPos:                                                       # Co
 with open(nombreArchivo, 'w') as archivo:                                   # Guardamos la informacion en el fichero taxis.txt
     for item in arrayTaxis:
         archivo.write(f"<{item['id']}><{item['x']}><{item['y']}>\n")
+
+"""
 
 
 print("[EMPEZANDO] Servidor inicializando...")

@@ -10,8 +10,9 @@ import time
 
 if len(sys.argv) != 8:
     print("ERROR: Número de argumentos arróneos")    
-    print("Formato correcto -> ./ejecutable <IP central> <Puerto central> <IP gestor> <Puerto central> <IP Sensor> <Puerto Sensor>")
+    print("Formato correcto -> python3 EC_DE <IP central> <Puerto central> <IP gestor> <Puerto central> <IP Sensor> <Puerto Sensor> <ID Taxi>")
     exit()
+
 
 argumentos = sys.argv
 
@@ -19,8 +20,13 @@ FIN = "FIN"
 
 IP_CENTRAL = argumentos[1]
 PUERTO_CENTRAL = int(argumentos[2])
+
+# @descomentar
+"""
 IP_GESTOR = argumentos[3]
 PUERTO_GESTOR = int(argumentos[4])
+"""
+
 IP_SENSOR = argumentos[5]
 PUERTO_SENSOR = int(argumentos[6])
 ID_TAXI = argumentos[7]
@@ -32,10 +38,10 @@ def conexionSensor():
     socketSensor.bind((IP_SENSOR, PUERTO_SENSOR))
     socketSensor.listen(1)
 
-    print("SERVIDOR CREADO [" + IP_SENSOR + " : " + PUERTO_SENSOR + "]")
+    print("SERVIDOR CREADO [" + IP_SENSOR + " : " + str(PUERTO_SENSOR) + "]")
     conexion, addr = socketSensor.accept()
 
-    print("Conexión hecha con Sensor en " + addr)
+    print("Conexión hecha con Sensor en " + str(addr))
 
     while True:
         mensaje = conexion.recv(4096)
@@ -49,7 +55,7 @@ def conexionSensor():
 def conexionCentral():
     socketCentral = socket.socket()
     socketCentral.connect((IP_CENTRAL, PUERTO_CENTRAL))
-    print("CONECTADO AL SERVIDOR CENTRAL EN [" + IP_CENTRAL + " : " + PUERTO_CENTRAL + "]")
+    print("CONECTADO AL SERVIDOR CENTRAL EN [" + IP_CENTRAL + " : " + str(PUERTO_CENTRAL) + "]")
 
     while True:
         # Aquí se hace todo lo que se tiene que hacer con el mapa
@@ -71,12 +77,17 @@ def conexionCentral():
 hiloSensor = threading.Thread(target=conexionSensor)
 hiloSensor.start()
 
+# @descomentar
+"""
 # Creamos el hilo a la Central y la ejecutamos
 hiloCentral = threading.Thread(target=conexionCentral)
 hiloCentral.start()
+"""
 
 # Esperamos a que los hilos acaben
 hiloSensor.join()
-hiloCentral.join()
+
+# @descomentar
+#hiloCentral.join()
 
 
