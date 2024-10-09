@@ -26,7 +26,7 @@ ANCHO = 20
 ALTO = 20
 MAX_CONEXIONES = 22
 SERVER = socket.gethostbyname(socket.gethostname())
-FIN = "<FIN>"
+FIN = "FIN"
 DIRECCION = (SERVER, PUERTO_ESCUCHA)
 
 ############ FUNCIONES #############

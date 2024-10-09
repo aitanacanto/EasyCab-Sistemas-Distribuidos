@@ -46,6 +46,7 @@ def enviarMensajes():
 
 def teclaW_detectada(event):
     global stop
+
     if stop == False:
         stop = True
         print("¡Se ha pulsado STOP!")
@@ -61,16 +62,16 @@ def teclaW_detectada(event):
 def finalTransmision(event):
     global stop
     stop = True
+    socket_de.send(FIN.encode('utf-8'))
     print("SE HA AVABADO LA TRANSMISIÓN")
-    exit()
+    root.quit()
 
 ############## MAIN ################
-global stop
 
 # Crear la ventana principal
 root = tk.Tk()
-root.title("Detector de tecla de Stop")
-root.geometry("400x300")
+root.title("Sensor")
+root.geometry("100x100")
 
 # Detectar cuando se toque la tecla S
 root.bind('<s>', teclaW_detectada)

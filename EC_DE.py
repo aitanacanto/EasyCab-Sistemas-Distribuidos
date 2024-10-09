@@ -46,8 +46,9 @@ def conexionSensor():
     while True:
         try:
             mensaje = conexion.recv(4096)
-            if not mensaje:
+            if mensaje == FIN:
                 break
+
             print("Mensaje Sensor entrante: [" + mensaje.decode() + "]")
     
         except Exception as e:
@@ -70,7 +71,7 @@ def conexionCentral():
         print("Recibido de la central: " + respuesta.decode())
 
         if respuesta.decode() == FIN:
-            print("CONEXIÓNO CERRADA CON EL SERVIDOR CENTRAL")
+            print("CONEXIÓN CERRADA CON EL SERVIDOR CENTRAL")
             break
 
     socketCentral.close()
