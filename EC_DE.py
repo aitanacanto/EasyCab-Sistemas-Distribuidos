@@ -21,11 +21,8 @@ FIN = "FIN"
 IP_CENTRAL = argumentos[1]
 PUERTO_CENTRAL = int(argumentos[2])
 
-# @descomentar
-"""
 IP_GESTOR = argumentos[3]
 PUERTO_GESTOR = int(argumentos[4])
-"""
 
 IP_SENSOR = argumentos[5]
 PUERTO_SENSOR = int(argumentos[6])
@@ -36,7 +33,7 @@ ID_TAXI = argumentos[7]
 def conexionSensor():
     socketSensor = socket.socket()
     socketSensor.bind((IP_SENSOR, PUERTO_SENSOR))
-    socketSensor.listen(1)
+    socketSensor.listen(60)
 
     print("SERVIDOR CREADO [" + IP_SENSOR + " : " + str(PUERTO_SENSOR) + "]")
     conexion, addr = socketSensor.accept()
@@ -50,6 +47,8 @@ def conexionSensor():
                 break
 
             print("Mensaje Sensor entrante: [" + mensaje.decode() + "]")
+
+            mandarMensajeCentral()
     
         except Exception as e:
             break
@@ -57,43 +56,31 @@ def conexionSensor():
     conexion.close()
     socketSensor.close()
 
-def conexionCentral():
+def mandarMensajeCentral():
+    global socketCentral
+    # Aquí se hace todo lo que se tiene que hacer con el mapa
+    mapa = "MAPA"
+    socketCentral.send(mapa.encode())
+
+    respuesta = socketCentral.recv(4096)
+    print("Recibido de la central: " + respuesta.decode())
+
+    if respuesta.decode() == FIN:                                                   # Acabar la conexión cuando el servidor mande un FIN
+        print("CONEXIÓN CERRADA CON EL SERVIDOR CENTRAL")
+
+def conectarConServidor():
+    global socketCentral
     socketCentral = socket.socket()
     socketCentral.connect((IP_CENTRAL, PUERTO_CENTRAL))
     print("CONECTADO AL SERVIDOR CENTRAL EN [" + IP_CENTRAL + " : " + str(PUERTO_CENTRAL) + "]")
 
-    while True:
-        # Aquí se hace todo lo que se tiene que hacer con el mapa
-        mapa = "MAPAAAAAAAAAAAAAAAAAAA"
-        socketCentral.send(mapa.encode())
-
-        respuesta = socketCentral.recv(4096)
-        print("Recibido de la central: " + respuesta.decode())
-
-        if respuesta.decode() == FIN:
-            print("CONEXIÓN CERRADA CON EL SERVIDOR CENTRAL")
-            break
-
-    socketCentral.close()
-
 ############## MAIN ################
+
+conectarConServidor()       # Conectamos el servidor con el DigitalEngine
 
 # Creamos el hilo al Sensor y la ejecutamos
 hiloSensor = threading.Thread(target=conexionSensor)
 hiloSensor.start()
 
-# @descomentar
-"""
-# Creamos el hilo a la Central y la ejecutamos
-hiloCentral = threading.Thread(target=conexionCentral)
-hiloCentral.start()
-"""
-
-# Esperamos a que los hilos acaben
 hiloSensor.join()
-
-# @descomentar
-"""
-hiloCentral.join()
-"""
 

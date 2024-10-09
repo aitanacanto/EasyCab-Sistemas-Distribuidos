@@ -11,6 +11,7 @@ FORMAT = 'utf-8'
 
 if len(sys.argv) != 4:
     print("ERROR: Número de argumentos arróneos")    
+    print("Fomrato correcto -> python3 EC_Central.py <Puerto escucha> <IP gestor> <Puerto gestor>\n")
     exit()
 
 argumentos = sys.argv
@@ -21,6 +22,9 @@ PUERTO_ESCUCHA = int(argumentos[1])
 IP_GESTOR = argumentos[2]
 PUERTO_GESTOR = int(argumentos[3])
 """
+
+ARCHIVO_MAPA = 'mapa.txt'
+ARCHIVO_TAXI = 'taxi.txt'
 
 ANCHO = 20
 ALTO = 20
@@ -35,16 +39,17 @@ def gestorTaxi(conn, addr):
     print(f"[NUEVA CONEXION] {conn} CONECTADO")
 
     conectado = True
-    while conectado:
-        msg_length = conn.recv(HEADER).decode(FORMAT)
-        if msg_length:
-            msg_length = int(msg_length)
-            msg = conn.recv(msg_length).decode(FORMAT)
+    while conectado:   
+        try:
+            msg = conn.recv(4096)
             if msg == FIN:
                 conectado = False
             print(f" He recibido del cliente [{addr}] el mensaje: {msg}")
             conn.send(f"HOLA CLIENTE: He recibido tu mensaje: {msg} ".encode(FORMAT))
-    print("ADIOS. TE ESPERO EN OTRA OCASION")
+        except Exception as e:
+            break
+
+    print("CONEXIÓN CON TAXI DESCONECTADO")
     conn.close()
 
 def startTaxi(server):
@@ -75,7 +80,7 @@ def conexionTaxi():
 """
 arrayPos = []
 
-with open('mapa.txt', 'r') as archivo:                                      # Lee la informacion sobre las posiciones del mapa
+with open(ARCHIVO_MAPA, 'r') as archivo:                                      # Lee la informacion sobre las posiciones del mapa
     for linea in archivo:
         datos = linea.strip().replace('<', '').split('>')
         
@@ -90,7 +95,6 @@ with open('mapa.txt', 'r') as archivo:                                      # Le
             'y'  : posicion_y
         })
 
-nombreArchivo = 'taxis.txt'
 arrayTaxis = []
 
 for item in arrayPos:                                                       # Coge solo los taxis del tablero que nos habian pasado
@@ -98,12 +102,11 @@ for item in arrayPos:                                                       # Co
         arrayTaxis.append(item)
 
 
-with open(nombreArchivo, 'w') as archivo:                                   # Guardamos la informacion en el fichero taxis.txt
+with open(ARCHIVO_TAXI, 'w') as archivo:                                   # Guardamos la informacion en el fichero taxis.txt
     for item in arrayTaxis:
         archivo.write(f"<{item['id']}><{item['x']}><{item['y']}>\n")
 
 """
-
 
 print("[EMPEZANDO] Servidor inicializando...")
 
