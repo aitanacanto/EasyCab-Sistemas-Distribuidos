@@ -1,6 +1,14 @@
 import socket
 import sys
 import threading
+import math
+
+################ LO QUE FALTA ##############
+# Falta por implementar la comunicación entre el servidor y los clientes y la gestión de dichas solicitudes
+
+
+
+
 
 # Entradas: Puerto de escucha
 #           Ip y puerto del gestor de colas
@@ -68,11 +76,47 @@ def startTaxi(server):
             conn.send("OOppsss... DEMASIADAS CONEXIONES. Tendrás que esperar a que alguien se vaya".encode(FORMAT))
             conn.close()
 
-def conexionTaxi():
 
+def conexionTaxi():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind(DIRECCION)
     startTaxi(server)
+
+
+def hayTaxisDisponibles(cliente_x, cliente_y):          # se pasa por parámetro la posición del cliente para escoger el taxi más cercano
+
+    with open(ARCHIVO_TAXI, 'r') as archivo:
+        lineas = archivo.readlines()
+
+    if not lineas:
+        print("NO HAY TAXIS :(")            # @implementar
+        return None
+
+    taxiMasCercano = None
+    minDistancia = float('inf')             # Es el infinito
+
+    for linea in lineas:
+        datos = linea.strip().replace('<', '').split('>')
+        
+        if len(datos) >= 3:
+            taxi_id = datos[0]
+            taxi_x = datos[1]
+            taxi_y = datos[2]
+        
+        distancia = math.sqrt((taxi_x - cliente_x) ** 2 + (taxi_y - cliente_y) ** 2)
+
+        if distancia < minDistancia:
+            minDistancia = distancia
+            taxiMasCercano = (taxi_id, taxi_x, taxi_y)
+
+    if taxiMasCercano:
+        print("Enviando al taxi más cercano")
+        return taxiMasCercano
+
+    else:
+        print("No se encuentran Taxis")     # @implementar
+        return None
+
 
 ############### MAIN ###############
 
@@ -113,6 +157,5 @@ print("[EMPEZANDO] Servidor inicializando...")
 # Creamos el hilo para los Taxis y la ejecutamos
 hiloTaxi = threading.Thread(target=conexionTaxi)
 hiloTaxi.start()
-
 
 hiloTaxi.join()

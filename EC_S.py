@@ -66,6 +66,7 @@ def finalTransmision(event):
     print("SE HA AVABADO LA TRANSMISIÓN")
     root.quit()
 
+
 ############## MAIN ################
 
 # Crear la ventana principal

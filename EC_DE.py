@@ -3,6 +3,14 @@ import sys
 import threading
 import time
 
+################ LO QUE FALTA ##############
+# Falta por hacer el movimiento del coche
+
+
+
+
+
+
 # Entradas: IP y Puerto de Central
 #           IP y Puerto del gestor de colas
 #           Ip y Puerto del Sensor
