@@ -14,8 +14,15 @@ import math
 #           Ip y puerto del gestor de colas
 #           Ip y puerto de la base de datos [Si utilizamos BBDD (si utilizamos archivos de texto no hace falta)]
 
-HEADER = 64
 FORMAT = 'utf-8'
+
+TAXI_MOVIENDO = 0x40  # Bit 6 en 1 para "moviendo"
+TAXI_PARADO = 0x00    # Bit 6 en 0 para "parado"
+NADA = 0x00           # Una celda vacía
+
+ANCHO = 20
+ALTO = 20
+MAX_CONEXIONES = 22
 
 if len(sys.argv) != 4:
     print("ERROR: Número de argumentos arróneos")    
@@ -25,21 +32,17 @@ if len(sys.argv) != 4:
 argumentos = sys.argv
 PUERTO_ESCUCHA = int(argumentos[1])
 
-# @descomentar
-"""
 IP_GESTOR = argumentos[2]
 PUERTO_GESTOR = int(argumentos[3])
-"""
 
 ARCHIVO_MAPA = 'mapa.txt'
 ARCHIVO_TAXI = 'taxi.txt'
 
-ANCHO = 20
-ALTO = 20
-MAX_CONEXIONES = 22
+mapa = bytearray([NADA] * (ANCHO * ALTO))
+
 SERVER = socket.gethostbyname(socket.gethostname())
-FIN = "FIN"
 DIRECCION = (SERVER, PUERTO_ESCUCHA)
+FIN = "FIN"
 
 ############ FUNCIONES #############
 
@@ -59,6 +62,7 @@ def gestorTaxi(conn, addr):
 
     print("CONEXIÓN CON TAXI DESCONECTADO")
     conn.close()
+
 
 def startTaxi(server):
     server.listen()
@@ -83,7 +87,7 @@ def conexionTaxi():
     startTaxi(server)
 
 
-def hayTaxisDisponibles(cliente_x, cliente_y):          # se pasa por parámetro la posición del cliente para escoger el taxi más cercano
+def hayTaxisDisponibles(cliente_x, cliente_y):                              # se pasa por parámetro la posición del cliente para escoger el taxi más cercano
 
     with open(ARCHIVO_TAXI, 'r') as archivo:
         lineas = archivo.readlines()
@@ -118,40 +122,95 @@ def hayTaxisDisponibles(cliente_x, cliente_y):          # se pasa por parámetro
         return None
 
 
+def colocarTaxi(mapa, id_taxi, x, y, estado):                               # Estado puede ser "miviendo" o "parado"
+
+    index = y * ANCHO + x  # Convertir coordenadas 2D en índice lineal
+
+    if estado == "moviendo":
+        mapa[index] = id_taxi | TAXI_MOVIENDO  # Usar bitwise OR para el estado "moviendo"
+    else:
+        mapa[index] = id_taxi | TAXI_PARADO    # Usar bitwise OR para el estado "parado"
+
+
+def colocarLocalizacion(mapa, letra, x, y):                                 # Guardamos el destino
+    index = y * ANCHO + x
+    mapa[index] = ord(letra)  # Almacenar el valor ASCII de la letra
+
+
+def colocarCliente(mapa, letra, x, y):
+    index = y * ANCHO + x
+    mapa[index] = ord(letra)
+
+
+def mostrarMapa(mapa):
+    for y in range(ALTO):
+        fila = []
+        for x in range(ANCHO): 
+            index = y * ANCHO + x
+            valor = mapa[index]
+
+            if valor == NADA:
+                fila.append('.')  # Celda vacía
+            elif (valor & TAXI_MOVIENDO) != 0:  # Si el taxi está moviéndose
+                fila.append(f"{valor & 0x3F}")  # Solo muestra el ID del taxi
+            elif (valor & 0x3F) != 0:  # Si el taxi está parado
+                fila.append(f"{valor & 0x3F}")  # Solo muestra el ID del taxi
+            elif 65 <= valor <= 90:  # Letras mayúsculas (localizaciones)
+                fila.append(chr(valor))  # Mostrar la letra de la localización
+            elif 97 <= valor <= 122:  # Letras minúsculas (clientes)
+                fila.append(chr(valor))  # Mostrar la letra del cliente
+            else:
+                fila.append('?')  # Elemento desconocido
+
+        print(' '.join(fila))
+
+
 ############### MAIN ###############
 
-# @descomentar
-"""
 arrayPos = []
 
-with open(ARCHIVO_MAPA, 'r') as archivo:                                      # Lee la informacion sobre las posiciones del mapa
+# Leer el archivo mapa.txt
+with open(ARCHIVO_MAPA, 'r') as archivo:
     for linea in archivo:
-        datos = linea.strip().replace('<', '').split('>')
+        # Usar split() para manejar espacios en blanco
+        datos = linea.strip().replace('<', '').replace('>', '').split()
         
-        if len(datos) >= 3:
-            id_localizacion = datos[0]
-            posicion_x = datos[1]
-            posicion_y = datos[2]
+        if len(datos) == 3:  # Asegúrate de que haya exactamente 3 elementos
+            id_localizacion = datos[0]  # Puede ser letra o número
+            posicion_x = int(datos[1])    # Convertir a entero
+            posicion_y = int(datos[2])    # Convertir a entero
 
-        arrayPos.append({
-            'id' : id_localizacion, 
-            'x'  : posicion_x,
-            'y'  : posicion_y
-        })
+            arrayPos.append({
+                'id': id_localizacion,
+                'x': posicion_x,
+                'y': posicion_y
+            })
+        else:
+            print(f"Línea malformada: {linea}")
+
 
 arrayTaxis = []
 
 for item in arrayPos:                                                       # Coge solo los taxis del tablero que nos habian pasado
-    if item['id'].isdigit():                                                # Seleccionar los taxis del mapa : )
+    if item['id'].isdigit():                                                # Seleccionar los taxis del mapa :)
         arrayTaxis.append(item)
+        
+
+for item in arrayPos:
+    if item['id'].isdigit():  # Verifica si es un ID de taxi
+        colocarTaxi(mapa, int(item['id']), item['x'], item['y'], "moviendo")
+    elif item['id'].isupper():  # Verifica si es una letra mayúscula (localización)
+        colocarLocalizacion(mapa, item['id'], item['x'], item['y'])  # Colocar localización
+    elif item['id'].islower():  # Verifica si es una letra minúscula (cliente)
+        colocarCliente(mapa, item['id'], item['x'], item['y'])  # Colocar cliente
 
 
-with open(ARCHIVO_TAXI, 'w') as archivo:                                   # Guardamos la informacion en el fichero taxis.txt
+with open(ARCHIVO_TAXI, 'w') as archivo:                                    # Guardamos la informacion en el fichero taxis.txt
     for item in arrayTaxis:
         archivo.write(f"<{item['id']}><{item['x']}><{item['y']}>\n")
 
-"""
 
+mostrarMapa(mapa)
 print("[EMPEZANDO] Servidor inicializando...")
 
 # Creamos el hilo para los Taxis y la ejecutamos
