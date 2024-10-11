@@ -4,11 +4,7 @@ import threading
 import time
 
 ################ LO QUE FALTA ##############
-# Falta por hacer el movimiento del coche
-
-
-
-
+# Falta hacer el movimiento del taxi hasta el cliente y luego hasta el destino
 
 
 # Entradas: IP y Puerto de Central
@@ -25,6 +21,9 @@ if len(sys.argv) != 8:
 argumentos = sys.argv
 
 FIN = "FIN"
+ALTO = 20
+ANCHO = 20
+NADA = 0x00
 
 IP_CENTRAL = argumentos[1]
 PUERTO_CENTRAL = int(argumentos[2])
@@ -37,7 +36,25 @@ PUERTO_SENSOR = int(argumentos[6])
 ID_TAXI = argumentos[7]
 
 ############ FUNCIONES #############
- 
+
+def mostrarMapa(mapa):
+    for y in range(ALTO):
+        fila = []
+        for x in range(ANCHO): 
+            index = y * ANCHO + x
+            valor = mapa[index]
+
+            if valor == NADA:
+                fila.append('.')                    # Celda vacía
+            elif 32 <= valor <= 126:                # De 32 a 126 es el rango para representar el ASSCI
+                fila.append(chr(valor))             # Representa el byte como char
+            elif (valor & 0x3F) != 0:               # Si el taxi está parado
+                fila.append(f"{valor & 0x3F}")     # Solo muestra el ID del taxi
+            else:
+                fila.append('?')                    # Elemento desconocido
+
+        print(' '.join(fila))
+
 def conexionSensor():
     socketSensor = socket.socket()
     socketSensor.bind((IP_SENSOR, PUERTO_SENSOR))
@@ -66,15 +83,29 @@ def conexionSensor():
 
 def mandarMensajeCentral():
     global socketCentral
-    # Aquí se hace todo lo que se tiene que hacer con el mapa
-    mapa = "MAPA"
-    socketCentral.send(mapa.encode())
 
-    respuesta = socketCentral.recv(4096)
-    print("Recibido de la central: " + respuesta.decode())
+    try:
+        # Recibir respuesta de la central
+        mapa = socketCentral.recv(1024)
 
-    if respuesta.decode() == FIN:                                                   # Acabar la conexión cuando el servidor mande un FIN
-        print("CONEXIÓN CERRADA CON EL SERVIDOR CENTRAL")
+        if not mapa:  # Si no se recibe nada, cerrar conexión
+            print("No se recibió respuesta. Cerrando conexión.")
+            return
+
+        # Implementa la actualización del taxi
+        if mapa.decode('utf-8') == FIN:  # Acabar la conexión cuando el servidor mande un FIN
+            print("CONEXIÓN CERRADA CON LA CENTRAL")
+            return 
+
+        print("Recibido de la central: ")
+        mostrarMapa(mapa)
+
+        socketCentral.sendall(mapa)  # Envía el mapa actualizado
+
+    except Exception as e:
+        print(f"Error en la comunicación con la central: {e}")
+        return 
+
 
 def conectarConServidor():
     global socketCentral

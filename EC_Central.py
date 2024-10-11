@@ -2,6 +2,7 @@ import socket
 import sys
 import threading
 import math
+import time
 
 ################ LO QUE FALTA ##############
 # Falta por implementar la comunicación entre el servidor y los clientes y la gestión de dichas solicitudes
@@ -46,17 +47,23 @@ FIN = "FIN"
 
 ############ FUNCIONES #############
 
+def asignarDestinoTaxi(conn, destino):                  # Asigna al taxi el destino al que tiene que ir (puede ser un cliente o un lugar)
+    conn.send(destino.encode('utf-8'))                  
+
 def gestorTaxi(conn, addr):
+    global mapa
+
     print(f"[NUEVA CONEXION] {conn} CONECTADO")
 
     conectado = True
     while conectado:   
         try:
-            msg = conn.recv(4096)
+            conn.sendall(mapa)
+            time.sleep(1)
+            msg = conn.recv(1024)
             if msg == FIN:
                 conectado = False
-            print(f" He recibido del cliente [{addr}] el mensaje: {msg}")
-            conn.send(f"HOLA CLIENTE: He recibido tu mensaje: {msg} ".encode(FORMAT))
+            print(f" He recibido del cliente [{addr}] el mapa actualizado :)")
         except Exception as e:
             break
 
@@ -80,12 +87,10 @@ def startTaxi(server):
             conn.send("OOppsss... DEMASIADAS CONEXIONES. Tendrás que esperar a que alguien se vaya".encode(FORMAT))
             conn.close()
 
-
 def conexionTaxi():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind(DIRECCION)
     startTaxi(server)
-
 
 def hayTaxisDisponibles(cliente_x, cliente_y):                              # se pasa por parámetro la posición del cliente para escoger el taxi más cercano
 
@@ -121,26 +126,22 @@ def hayTaxisDisponibles(cliente_x, cliente_y):                              # se
         print("No se encuentran Taxis")     # @implementar
         return None
 
-
 def colocarTaxi(mapa, id_taxi, x, y, estado):                               # Estado puede ser "miviendo" o "parado"
 
-    index = y * ANCHO + x  # Convertir coordenadas 2D en índice lineal
+    index = y * ANCHO + x                               # Convertir coordenadas 2D en índice lineal
 
     if estado == "moviendo":
-        mapa[index] = id_taxi | TAXI_MOVIENDO  # Usar bitwise OR para el estado "moviendo"
+        mapa[index] = id_taxi                           # Usar bitwise OR para el estado "moviendo"
     else:
-        mapa[index] = id_taxi | TAXI_PARADO    # Usar bitwise OR para el estado "parado"
-
+        mapa[index] = id_taxi                           # Usar bitwise OR para el estado "parado"
 
 def colocarLocalizacion(mapa, letra, x, y):                                 # Guardamos el destino
     index = y * ANCHO + x
-    mapa[index] = ord(letra)  # Almacenar el valor ASCII de la letra
-
+    mapa[index] = ord(letra)                            # Almacenar el valor ASCII de la letra
 
 def colocarCliente(mapa, letra, x, y):
     index = y * ANCHO + x
     mapa[index] = ord(letra)
-
 
 def mostrarMapa(mapa):
     for y in range(ALTO):
@@ -150,17 +151,13 @@ def mostrarMapa(mapa):
             valor = mapa[index]
 
             if valor == NADA:
-                fila.append('.')  # Celda vacía
-            elif (valor & TAXI_MOVIENDO) != 0:  # Si el taxi está moviéndose
-                fila.append(f"{valor & 0x3F}")  # Solo muestra el ID del taxi
-            elif (valor & 0x3F) != 0:  # Si el taxi está parado
-                fila.append(f"{valor & 0x3F}")  # Solo muestra el ID del taxi
-            elif 65 <= valor <= 90:  # Letras mayúsculas (localizaciones)
-                fila.append(chr(valor))  # Mostrar la letra de la localización
-            elif 97 <= valor <= 122:  # Letras minúsculas (clientes)
-                fila.append(chr(valor))  # Mostrar la letra del cliente
+                fila.append('.')                    # Celda vacía
+            elif 32 <= valor <= 126:                # De 32 a 126 es el rango para representar el ASSCI
+                fila.append(chr(valor))             # Representa el byte como char
+            elif (valor & 0x3F) != 0:               # Si el taxi está parado
+                fila.append(f"{valor & 0x3F}")     # Solo muestra el ID del taxi
             else:
-                fila.append('?')  # Elemento desconocido
+                fila.append('?')                    # Elemento desconocido
 
         print(' '.join(fila))
 
@@ -191,8 +188,8 @@ with open(ARCHIVO_MAPA, 'r') as archivo:
 
 arrayTaxis = []
 
-for item in arrayPos:                                                       # Coge solo los taxis del tablero que nos habian pasado
-    if item['id'].isdigit():                                                # Seleccionar los taxis del mapa :)
+for item in arrayPos:                                           # Coge solo los taxis del tablero que nos habian pasado
+    if item['id'].isdigit():                                    # Seleccionar los taxis del mapa :)
         arrayTaxis.append(item)
         
 
