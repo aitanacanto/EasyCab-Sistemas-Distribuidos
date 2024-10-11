@@ -45,10 +45,7 @@ SERVER = socket.gethostbyname(socket.gethostname())
 DIRECCION = (SERVER, PUERTO_ESCUCHA)
 FIN = "FIN"
 
-############ FUNCIONES #############
-
-def asignarDestinoTaxi(conn, destino):                  # Asigna al taxi el destino al que tiene que ir (puede ser un cliente o un lugar)
-    conn.send(destino.encode('utf-8'))                  
+############ FUNCIONES #############                 
 
 def gestorTaxi(conn, addr):
     global mapa
@@ -58,18 +55,17 @@ def gestorTaxi(conn, addr):
     conectado = True
     while conectado:   
         try:
-            conn.sendall(mapa)
+            # @KAFKA -> Enviar el mapa al DigitalEngine
             time.sleep(1)
-            msg = conn.recv(1024)
-            if msg == FIN:
-                conectado = False
+            # @KAFKA -> Recibir el mapa actualizado del DigitalEngine
+            #if msg == FIN:
+            #    conectado = False
             print(f" He recibido del cliente [{addr}] el mapa actualizado :)")
         except Exception as e:
             break
 
     print("CONEXIÓN CON TAXI DESCONECTADO")
     conn.close()
-
 
 def startTaxi(server):
     server.listen()

@@ -6,6 +6,7 @@ import time
 ################ LO QUE FALTA ##############
 # Falta hacer el movimiento del taxi hasta el cliente y luego hasta el destino
 
+####### PREGUNTAS #######
 
 # Entradas: IP y Puerto de Central
 #           IP y Puerto del gestor de colas
@@ -81,26 +82,38 @@ def conexionSensor():
     conexion.close()
     socketSensor.close()
 
+def actualizarMapa(destino, objetivo):
+    print("")
+
 def mandarMensajeCentral():
     global socketCentral
 
     try:
         # Recibir respuesta de la central
-        mapa = socketCentral.recv(1024)
+        # @KAFKA -> Recibe el mapa del servidor
 
-        if not mapa:  # Si no se recibe nada, cerrar conexión
+        # @descomentar
+        """
+        if not mapa:                                    # Si no se recibe nada, cerrar conexión
             print("No se recibió respuesta. Cerrando conexión.")
             return
 
         # Implementa la actualización del taxi
-        if mapa.decode('utf-8') == FIN:  # Acabar la conexión cuando el servidor mande un FIN
+        if mapa.decode('utf-8') == FIN:                 # Acabar la conexión cuando el servidor mande un FIN
             print("CONEXIÓN CERRADA CON LA CENTRAL")
             return 
 
-        print("Recibido de la central: ")
-        mostrarMapa(mapa)
+        mostrarMapa(mapa)                               # Recibo el mapa desde la central
 
-        socketCentral.sendall(mapa)  # Envía el mapa actualizado
+        """
+        # Actualizamos el mapa (moviendo al taxi hasta su objetivo)
+        # ¿Enviamos solo la posición nueva del taxi o enviamos el mapa entero?
+
+        destino = (5,5)                                 # @Implementar -> Pasar el destino del taxi (puede ser el cliente o el destino)
+        objetivo = 'c'                                  # Objetivo = 'c': El destino del taxi es el cliente / 'f': El destino del taxi es el final
+        actualizarMapa(destino, objetivo)
+
+        # @KAFKA -> Envía el mapa actualizado al servidor
 
     except Exception as e:
         print(f"Error en la comunicación con la central: {e}")
