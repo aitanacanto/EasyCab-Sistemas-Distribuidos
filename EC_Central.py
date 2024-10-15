@@ -8,9 +8,6 @@ import time
 # Falta por implementar la comunicación entre el servidor y los clientes y la gestión de dichas solicitudes
 
 
-
-
-
 # Entradas: Puerto de escucha
 #           Ip y puerto del gestor de colas
 #           Ip y puerto de la base de datos [Si utilizamos BBDD (si utilizamos archivos de texto no hace falta)]

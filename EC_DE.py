@@ -50,7 +50,7 @@ def mostrarMapa(mapa):
             elif 32 <= valor <= 126:                # De 32 a 126 es el rango para representar el ASSCI
                 fila.append(chr(valor))             # Representa el byte como char
             elif (valor & 0x3F) != 0:               # Si el taxi está parado
-                fila.append(f"{valor & 0x3F}")     # Solo muestra el ID del taxi
+                fila.append(f"{valor & 0x3F}")      # Solo muestra el ID del taxi
             else:
                 fila.append('?')                    # Elemento desconocido
 
@@ -82,7 +82,7 @@ def conexionSensor():
     conexion.close()
     socketSensor.close()
 
-def actualizarMapa(destino, objetivo):
+def actualizarPosicion(cliente, destino, objetivo):
     print("")
 
 def mandarMensajeCentral():
@@ -109,9 +109,10 @@ def mandarMensajeCentral():
         # Actualizamos el mapa (moviendo al taxi hasta su objetivo)
         # ¿Enviamos solo la posición nueva del taxi o enviamos el mapa entero?
 
-        destino = (5,5)                                 # @Implementar -> Pasar el destino del taxi (puede ser el cliente o el destino)
-        objetivo = 'c'                                  # Objetivo = 'c': El destino del taxi es el cliente / 'f': El destino del taxi es el final
-        actualizarMapa(destino, objetivo)
+        cliente = (12,8)
+        destino = (5,5)                                  # @Implementar -> Pasar el destino del taxi (puede ser el cliente o el destino)
+        objetivo = 'c'                                   # Objetivo = 'c': El destino del taxi es el cliente / 'f': El destino del taxi es el final
+        actualizarPosicion(cliente, destino, objetivo)
 
         # @KAFKA -> Envía el mapa actualizado al servidor
 
