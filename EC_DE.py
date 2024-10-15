@@ -120,7 +120,6 @@ def mandarMensajeCentral():
         print(f"Error en la comunicación con la central: {e}")
         return 
 
-
 def conectarConServidor():
     global socketCentral
     socketCentral = socket.socket()

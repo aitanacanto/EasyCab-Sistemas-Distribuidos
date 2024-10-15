@@ -2,10 +2,9 @@ import socket
 import sys
 import threading
 import math
-import time
 
 ################ LO QUE FALTA ##############
-# Falta por implementar la comunicación entre el servidor y los clientes y la gestión de dichas solicitudes
+# Casi todo :( 
 
 
 # Entradas: Puerto de escucha
@@ -14,9 +13,9 @@ import time
 
 FORMAT = 'utf-8'
 
-TAXI_MOVIENDO = 0x40  # Bit 6 en 1 para "moviendo"
-TAXI_PARADO = 0x00    # Bit 6 en 0 para "parado"
-NADA = 0x00           # Una celda vacía
+TAXI_MOVIENDO = 0x40        # Bit 6 en 1 para "moviendo"
+TAXI_PARADO = 0x00          # Bit 6 en 0 para "parado"
+NADA = 0x00                 # Una celda vacía
 
 ANCHO = 20
 ALTO = 20
@@ -36,30 +35,43 @@ PUERTO_GESTOR = int(argumentos[3])
 ARCHIVO_MAPA = 'mapa.txt'
 ARCHIVO_TAXI = 'taxi.txt'
 
-mapa = bytearray([NADA] * (ANCHO * ALTO))
+mapa = [[' ' for _ in range(10)] for _ in range(10)]
 
 SERVER = socket.gethostbyname(socket.gethostname())
 DIRECCION = (SERVER, PUERTO_ESCUCHA)
+START = "START"
 FIN = "FIN"
+
+############ COSAS ############
+
+# @KAFKA -> Enviar el mapa al DigitalEngine
+#time.sleep(1)
+# @KAFKA -> Recibir el mapa actualizado del DigitalEngine
+#if msg == FIN:
+#    conectado = False
 
 ############ FUNCIONES #############                 
 
-def gestorTaxi(conn, addr):
-    global mapa
+def comunicacionTaxi():
+    print("Implementar esto :(")
 
+def verificacionTaxi(conn, addr):
     print(f"[NUEVA CONEXION] {conn} CONECTADO")
 
-    conectado = True
-    while conectado:   
-        try:
-            # @KAFKA -> Enviar el mapa al DigitalEngine
-            time.sleep(1)
-            # @KAFKA -> Recibir el mapa actualizado del DigitalEngine
-            #if msg == FIN:
-            #    conectado = False
-            print(f" He recibido del cliente [{addr}] el mapa actualizado :)")
-        except Exception as e:
-            break
+    try:
+        mensaje = conn.recv(4096)
+        
+        if mensaje.decode[FORMAT] == FIN:
+            print("CONEXIÓN CON TAXI DESCONECTADO POR PETICIÓN")
+            conn.close()
+            return    
+
+        print("Proceso por el que se mira si la ID está operativa y se manda la ubicación del mismo")                                   # @Implementar
+        print("Si no está operativa se le manda a tomar por culo, y que se cierre el programa del Digital Engine junto a su Sensor")    # @Implementar
+        print("Hay que cambiar en la base de datos el NO de esa ID por un SI porque pasa a estar asociado")
+
+    except Exception as e:
+        print("EXCEPCTION ---> NO SE HA PODIDO COMUNICAR CON EL TAXI")
 
     print("CONEXIÓN CON TAXI DESCONECTADO")
     conn.close()
@@ -71,7 +83,7 @@ def startTaxi(server):
         conn, addr = server.accept()
         CONEX_ACTIVAS = threading.active_count() - 1
         if(CONEX_ACTIVAS <= MAX_CONEXIONES):
-            thread = threading.Thread(target=gestorTaxi, args=(conn, addr))
+            thread = threading.Thread(target=verificacionTaxi, args=(conn, addr))
             thread.start()
             print(f"[CONEXIONES ACTIVAS] {CONEX_ACTIVAS}")
             print("CONEXIONES RESTANTES PARA CERRAR EL SERVICIO", MAX_CONEXIONES-CONEX_ACTIVAS)
@@ -85,7 +97,43 @@ def conexionTaxi():
     server.bind(DIRECCION)
     startTaxi(server)
 
-def hayTaxisDisponibles(cliente_x, cliente_y):                              # se pasa por parámetro la posición del cliente para escoger el taxi más cercano
+def actualizarPosicionTaxiFichero(id_taxi, nuevo_x, nuevo_y):               # Se actualiza la posición del taxi en la base de datos (se llama a la finalización del movimiento del Taxi)
+    with open(ARCHIVO_TAXI, 'r') as archivo:
+        lineas = archivo.readlines()
+
+    taxiActualizado = False
+    nuevasLineas = []
+
+    # Recorrer cada línea y buscar el taxi con el ID especificado
+    for linea in lineas:
+        datos = linea.strip().replace('<', '').split('>')
+
+    if len(datos) >= 3:
+        taxi_id = datos[1]  # El ID del taxi está en la segunda posición
+        taxi_x = datos[2]   # Posición X actual del taxi
+        taxi_y = datos[3]   # Posición Y actual del taxi
+
+        # Si el ID coincide con el taxi que queremos actualizar
+        if taxi_id == str(id_taxi):
+            # Actualizamos la posición con los nuevos valores
+            taxi_x = nuevo_x
+            taxi_y = nuevo_y
+            taxiActualizado = True
+
+        # Agregar la línea actualizada (o la misma línea si no es el taxi buscado)
+        nuevasLineas.append(f"<NO><{taxi_id}><{taxi_x}><{taxi_y}>\n")
+
+    else:
+        nuevasLineas.append(linea)  # Agregar las líneas no válidas también
+
+    if not taxiActualizado:
+        print(f"No se encontró el taxi con ID {id_taxi} para actualizar.")
+
+    # Reescribir el archivo con los nuevos datos
+    with open(ARCHIVO_TAXI, 'w') as archivo:
+        archivo.writelines(nuevasLineas)
+
+def hayTaxisDisponibles(cliente_x, cliente_y):                              # Sé pasa por parámetro la posición del cliente para escoger el taxi más cercano
 
     with open(ARCHIVO_TAXI, 'r') as archivo:
         lineas = archivo.readlines()
@@ -119,48 +167,34 @@ def hayTaxisDisponibles(cliente_x, cliente_y):                              # se
         print("No se encuentran Taxis")     # @implementar
         return None
 
-def colocarTaxi(mapa, id_taxi, x, y, estado):                               # Estado puede ser "miviendo" o "parado"
-
-    index = y * ANCHO + x                               # Convertir coordenadas 2D en índice lineal
-
-    if estado == "moviendo":
-        mapa[index] = id_taxi                           # Usar bitwise OR para el estado "moviendo"
-    else:
-        mapa[index] = id_taxi                           # Usar bitwise OR para el estado "parado"
-
-def colocarLocalizacion(mapa, letra, x, y):                                 # Guardamos el destino
-    index = y * ANCHO + x
-    mapa[index] = ord(letra)                            # Almacenar el valor ASCII de la letra
-
-def colocarCliente(mapa, letra, x, y):
-    index = y * ANCHO + x
-    mapa[index] = ord(letra)
-
-def mostrarMapa(mapa):
+def mostrarMapa(mapa):                                                      # GESTION MATRIZ
     for y in range(ALTO):
         fila = []
         for x in range(ANCHO): 
-            index = y * ANCHO + x
-            valor = mapa[index]
-
-            if valor == NADA:
-                fila.append('.')                    # Celda vacía
-            elif 32 <= valor <= 126:                # De 32 a 126 es el rango para representar el ASSCI
-                fila.append(chr(valor))             # Representa el byte como char
-            elif (valor & 0x3F) != 0:               # Si el taxi está parado
-                fila.append(f"{valor & 0x3F}")     # Solo muestra el ID del taxi
-            else:
-                fila.append('?')                    # Elemento desconocido
+            fila.append(mapa[x][y])
 
         print(' '.join(fila))
 
+def meterTaxisBaseDatos(arrayPos, arrayTaxis):
+    for item in arrayPos:                                                       # Coge solo los taxis del tablero que nos habian pasado
+        if item['id'].isdigit():                                                # Seleccionar los taxis del mapa :)
+            arrayTaxis.append(item)
+            
+    with open(ARCHIVO_TAXI, 'w') as archivo:                                    # Guardamos la informacion en el fichero taxis.txt
+        for item in arrayTaxis:
+            archivo.write(f"<NO><{item['id']}><{item['x']}><{item['y']}>\n")    # No está asociado a ningún taxi
+
+    return arrayTaxis
+
+def inicMapa(mapa):
+    for item in arrayPos:
+        mapa[item['x']][item['y']] = str(item['id'])
 
 ############### MAIN ###############
 
 arrayPos = []
 
-# Leer el archivo mapa.txt
-with open(ARCHIVO_MAPA, 'r') as archivo:
+with open(ARCHIVO_MAPA, 'r') as archivo:                                    # Leer el archivo mapa.txt
     for linea in archivo:
         # Usar split() para manejar espacios en blanco
         datos = linea.strip().replace('<', '').replace('>', '').split()
@@ -178,28 +212,10 @@ with open(ARCHIVO_MAPA, 'r') as archivo:
         else:
             print(f"Línea malformada: {linea}")
 
-
 arrayTaxis = []
 
-for item in arrayPos:                                           # Coge solo los taxis del tablero que nos habian pasado
-    if item['id'].isdigit():                                    # Seleccionar los taxis del mapa :)
-        arrayTaxis.append(item)
-        
-
-for item in arrayPos:
-    if item['id'].isdigit():  # Verifica si es un ID de taxi
-        colocarTaxi(mapa, int(item['id']), item['x'], item['y'], "moviendo")
-    elif item['id'].isupper():  # Verifica si es una letra mayúscula (localización)
-        colocarLocalizacion(mapa, item['id'], item['x'], item['y'])  # Colocar localización
-    elif item['id'].islower():  # Verifica si es una letra minúscula (cliente)
-        colocarCliente(mapa, item['id'], item['x'], item['y'])  # Colocar cliente
-
-
-with open(ARCHIVO_TAXI, 'w') as archivo:                                    # Guardamos la informacion en el fichero taxis.txt
-    for item in arrayTaxis:
-        archivo.write(f"<{item['id']}><{item['x']}><{item['y']}>\n")
-
-
+meterTaxisBaseDatos(arrayPos, arrayTaxis)
+inicMapa(mapa)
 mostrarMapa(mapa)
 print("[EMPEZANDO] Servidor inicializando...")
 

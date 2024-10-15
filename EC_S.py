@@ -17,10 +17,8 @@ FIN = "FIN"
 OK = "OK"
 KO = "KO"
 
-
 IP_DE = argumentos[1]
 PUERTO_DE = int(argumentos[2])
-
 
 ############ FUNCIONES #############
 
@@ -65,7 +63,6 @@ def finalTransmision(event):
     socket_de.send(FIN.encode('utf-8'))
     print("SE HA AVABADO LA TRANSMISIÓN")
     root.quit()
-
 
 ############## MAIN ################
 
