@@ -4,6 +4,7 @@ import threading
 import time
 
 ################ LO QUE FALTA ##############
+
 # Falta hacer el movimiento del taxi hasta el cliente y luego hasta el destino
 
 ####### PREGUNTAS #######
@@ -18,13 +19,12 @@ if len(sys.argv) != 8:
     print("Formato correcto -> python3 EC_DE <IP central> <Puerto central> <IP gestor> <Puerto central> <IP Sensor> <Puerto Sensor> <ID Taxi>")
     exit()
 
-
 argumentos = sys.argv
 
 FIN = "FIN"
+
 ALTO = 20
 ANCHO = 20
-NADA = 0x00
 
 IP_CENTRAL = argumentos[1]
 PUERTO_CENTRAL = int(argumentos[2])
@@ -34,6 +34,7 @@ PUERTO_GESTOR = int(argumentos[4])
 
 IP_SENSOR = argumentos[5]
 PUERTO_SENSOR = int(argumentos[6])
+
 ID_TAXI = argumentos[7]
 
 ############ FUNCIONES #############
@@ -42,17 +43,7 @@ def mostrarMapa(mapa):
     for y in range(ALTO):
         fila = []
         for x in range(ANCHO): 
-            index = y * ANCHO + x
-            valor = mapa[index]
-
-            if valor == NADA:
-                fila.append('.')                    # Celda vacía
-            elif 32 <= valor <= 126:                # De 32 a 126 es el rango para representar el ASSCI
-                fila.append(chr(valor))             # Representa el byte como char
-            elif (valor & 0x3F) != 0:               # Si el taxi está parado
-                fila.append(f"{valor & 0x3F}")      # Solo muestra el ID del taxi
-            else:
-                fila.append('?')                    # Elemento desconocido
+            fila.append(mapa[x][y])
 
         print(' '.join(fila))
 
@@ -82,11 +73,48 @@ def conexionSensor():
     conexion.close()
     socketSensor.close()
 
-def actualizarPosicion(cliente, destino, objetivo):
-    print("")
+def actualizarPosicion(cliente, destino, objetivo):                 # Objetivo puede ser "C" o "D" dependiendo si el taxi va a recoger al cliente o va al destino
+    if objetivo == "C":
+        final = cliente
+    else:
+        final = destino
+
+    caminoMinimo = " "
+
+    if cliente[0] != final[0]:                                      # Aquí nos movemos en horizontal
+        posInicial = cliente[0]
+        posFinal = final[0]
+        movimiento = "HORIZONTAL"
+    else:
+        posInicial = cliente[1]
+        posFinal = final[1]
+        movimiento = "VERTICAL"
+
+
+    caminoPorDentro = abs(posInicial - posFinal)                # Movimiento si va por dentro del mapa
+    caminoPorFuera = ANCHO - caminoPorDentro                    # Movimiento si va por fuera del mapa, pj sale de la derecha y entra por la izquierda
+
+    if caminoPorFuera < caminoPorDentro:
+        caminoMinimo = "FUERA"
+    else:
+        caminoMinimo = "DENTRO"
+
+
+    if movimiento == "HORIZONTAL":
+        if (posInicial < posFinal and caminoMinimo == "DENTRO") or (posInicial > posFinal and caminoMinimo == "FUERA"):
+            posicionFinal = (cliente[0]+1, cliente[1])              # Se mueve a la derecha
+        else:
+            posicionFinal = (cliente[0]-1, cliente[1])              # Se mueve a la izquierda
+    
+    else:
+        if (posInicial < posFinal and caminoMinimo == "DENTRO") or (posInicial > posFinal and caminoMinimo == "FUERA"):
+            posicionFinal = (cliente[0], cliente[1]+1)              # Se mueve a la derecha
+        else:
+            posicionFinal = (cliente[0], cliente[1]-1)              # Se mueve a la izquierda
+
+    return posicionFinal
 
 def mandarMensajeCentral():
-    global socketCentral
 
     try:
         # Recibir respuesta de la central
@@ -96,6 +124,7 @@ def mandarMensajeCentral():
         """
         if not mapa:                                    # Si no se recibe nada, cerrar conexión
             print("No se recibió respuesta. Cerrando conexión.")
+            conn.close()
             return
 
         # Implementa la actualización del taxi
@@ -107,11 +136,10 @@ def mandarMensajeCentral():
 
         """
         # Actualizamos el mapa (moviendo al taxi hasta su objetivo)
-        # ¿Enviamos solo la posición nueva del taxi o enviamos el mapa entero?
 
         cliente = (12,8)
         destino = (5,5)                                  # @Implementar -> Pasar el destino del taxi (puede ser el cliente o el destino)
-        objetivo = 'c'                                   # Objetivo = 'c': El destino del taxi es el cliente / 'f': El destino del taxi es el final
+        objetivo = 'C'                                   # Objetivo = 'c': El destino del taxi es el cliente / 'D': El destino del taxi es el final
         actualizarPosicion(cliente, destino, objetivo)
 
         # @KAFKA -> Envía el mapa actualizado al servidor

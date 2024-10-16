@@ -52,11 +52,11 @@ FIN = "FIN"
 
 ############ FUNCIONES #############                 
 
-def comunicacionTaxi():
-    print("Implementar esto :(")
+def comunicacionTaxi():                                                     # Aquí es donde se manda y se recive la información del DigitalEngine
+    print("Implementar esto con KAFKA:(")
 
 def verificacionTaxi(conn, addr):
-    print(f"[NUEVA CONEXION] {conn} CONECTADO")
+    print(f"[NUEVA CONEXION] {conn},{addr} CONECTADO")
 
     try:
         mensaje = conn.recv(4096)
@@ -97,7 +97,7 @@ def conexionTaxi():
     server.bind(DIRECCION)
     startTaxi(server)
 
-def actualizarPosicionTaxiFichero(id_taxi, nuevo_x, nuevo_y):               # Se actualiza la posición del taxi en la base de datos (se llama a la finalización del movimiento del Taxi)
+def actualizarPosicionTaxiFichero(id_taxi, nuevo_x, nuevo_y, finalizado):               # Se actualiza la posición del taxi en la base de datos, se ejecuta cada segundo (finalizado es un bool, dice si se ha acabado el viaje)
     with open(ARCHIVO_TAXI, 'r') as archivo:
         lineas = archivo.readlines()
 
@@ -109,9 +109,9 @@ def actualizarPosicionTaxiFichero(id_taxi, nuevo_x, nuevo_y):               # Se
         datos = linea.strip().replace('<', '').split('>')
 
     if len(datos) >= 3:
-        taxi_id = datos[1]  # El ID del taxi está en la segunda posición
-        taxi_x = datos[2]   # Posición X actual del taxi
-        taxi_y = datos[3]   # Posición Y actual del taxi
+        taxi_id = datos[2]  # El ID del taxi está en la segunda posición
+        taxi_x = datos[3]   # Posición X actual del taxi
+        taxi_y = datos[4]   # Posición Y actual del taxi
 
         # Si el ID coincide con el taxi que queremos actualizar
         if taxi_id == str(id_taxi):
@@ -121,7 +121,10 @@ def actualizarPosicionTaxiFichero(id_taxi, nuevo_x, nuevo_y):               # Se
             taxiActualizado = True
 
         # Agregar la línea actualizada (o la misma línea si no es el taxi buscado)
-        nuevasLineas.append(f"<NO><{taxi_id}><{taxi_x}><{taxi_y}>\n")
+        if finalizado:
+            nuevasLineas.append(f"<SI><NO><{taxi_id}><{taxi_x}><{taxi_y}>\n")
+        else:
+            nuevasLineas.append(f"<SI><SI><{taxi_id}><{taxi_x}><{taxi_y}>\n")
 
     else:
         nuevasLineas.append(linea)  # Agregar las líneas no válidas también
@@ -149,22 +152,26 @@ def hayTaxisDisponibles(cliente_x, cliente_y):                              # S�
         datos = linea.strip().replace('<', '').split('>')
         
         if len(datos) >= 3:
-            taxi_id = datos[0]
-            taxi_x = datos[1]
-            taxi_y = datos[2]
-        
-        distancia = math.sqrt((taxi_x - cliente_x) ** 2 + (taxi_y - cliente_y) ** 2)
+            taxi_asignado = datos[0]
+            taxi_operativo = datos[1]
+            taxi_id = datos[2]
+            taxi_x = datos[3]
+            taxi_y = datos[4]
 
-        if distancia < minDistancia:
-            minDistancia = distancia
-            taxiMasCercano = (taxi_id, taxi_x, taxi_y)
+        if taxi_asignado == "SI" and taxi_operativo == "SI":
+            distancia = math.sqrt((taxi_x - cliente_x) ** 2 + (taxi_y - cliente_y) ** 2)
+
+            if distancia < minDistancia:
+                minDistancia = distancia
+                taxiMasCercano = (taxi_id, taxi_x, taxi_y)
 
     if taxiMasCercano:
         print("Enviando al taxi más cercano")
+        print("Cambiar el NO por el SI en la operatividad del taxi (posición 2)")   # @Implementar
         return taxiMasCercano
 
     else:
-        print("No se encuentran Taxis")     # @implementar
+        print("No se encuentran Taxis libres")     # @implementar
         return None
 
 def mostrarMapa(mapa):                                                      # GESTION MATRIZ
@@ -175,16 +182,15 @@ def mostrarMapa(mapa):                                                      # GE
 
         print(' '.join(fila))
 
-def meterTaxisBaseDatos(arrayPos, arrayTaxis):
+def meterTaxisBaseDatos(arrayPos):
+    arrayTaxis = []
     for item in arrayPos:                                                       # Coge solo los taxis del tablero que nos habian pasado
         if item['id'].isdigit():                                                # Seleccionar los taxis del mapa :)
             arrayTaxis.append(item)
             
     with open(ARCHIVO_TAXI, 'w') as archivo:                                    # Guardamos la informacion en el fichero taxis.txt
         for item in arrayTaxis:
-            archivo.write(f"<NO><{item['id']}><{item['x']}><{item['y']}>\n")    # No está asociado a ningún taxi
-
-    return arrayTaxis
+            archivo.write(f"<NO><NO><{item['id']}><{item['x']}><{item['y']}>\n")    # No está asociado a ningún taxi / No está haciendo ningún trayecto
 
 def inicMapa(mapa):
     for item in arrayPos:
@@ -212,9 +218,7 @@ with open(ARCHIVO_MAPA, 'r') as archivo:                                    # Le
         else:
             print(f"Línea malformada: {linea}")
 
-arrayTaxis = []
-
-meterTaxisBaseDatos(arrayPos, arrayTaxis)
+meterTaxisBaseDatos(arrayPos)
 inicMapa(mapa)
 mostrarMapa(mapa)
 print("[EMPEZANDO] Servidor inicializando...")
