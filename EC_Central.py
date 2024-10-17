@@ -95,6 +95,7 @@ def movimientoTaxi(id_taxi, movimiento):                                        
         else:
             posNuevaX = posAntiguaX - 1
 
+    return (posNuevaX, posNuevaY)
 
 
 def comunicacionTaxi():                                                                 # Aquí es donde se manda y se recive la información del DigitalEngine
