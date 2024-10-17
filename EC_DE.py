@@ -2,6 +2,8 @@ import socket
 import sys
 import threading
 import time
+from kafka import KafkaConsumer
+import json
 
 ################ LO QUE FALTA ##############
 
@@ -164,3 +166,37 @@ hiloSensor.start()
 
 hiloSensor.join()
 
+############# FUNCION CONSUMIDOR DE KAFKA #############
+
+def consumidorKafka():
+    consumer = KafkaConsumer(
+        'asignaciones_taxi',
+        bootstrap_servers=['localhost:9092'],
+        auto_offset_reset='earliest',
+        enable_auto_commit=True,
+        group_id='grupo_taxis',
+        value_deserializer=lambda x: json.loads(x.decode('utf-8'))
+    )
+
+    print("Esperando asignaciones de taxis...")
+    for message in consumer:
+        asignacion = message.value
+        print(f"Asignación recibida: Taxi asignado a {asignacion['cliente_id']} desde {asignacion['ubicacion']} a {asignacion['destino']}")
+        # Aquí puedes implementar la lógica para mover el taxi o responder a la asignación.
+
+############## MAIN ################
+
+conectarConServidor()  # Servidor conectado con el DigitalEngine
+
+# Hilo Sensor
+hiloSensor = threading.Thread(target=conexionSensor)
+hiloSensor.start()
+
+# Hilo para el consumidor de Kafka
+hiloKafka = threading.Thread(target=consumidorKafka)
+hiloKafka.start()
+
+# Esperar que el hilo del sensor termine (puedes cambiar esto según tu lógica)
+hiloSensor.join()
+# Puedes unirte al hilo del consumidor de Kafka si lo deseas
+# hiloKafka.join()  # Descomenta si quieres esperar que el consumidor termine
