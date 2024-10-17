@@ -24,6 +24,7 @@ if len(sys.argv) != 8:
 argumentos = sys.argv
 
 FIN = "FIN"
+START = "START"
 
 ALTO = 20
 ANCHO = 20
@@ -150,11 +151,23 @@ def mandarMensajeCentral():
         print(f"Error en la comunicación con la central: {e}")
         return 
 
+def validarID():
+    socketCentral.send(ID_TAXI.encode())            # Manda a central "START" para que este le mande si la ID solicitada está disponible
+    respuesta = socketCentral.recv(4096)
+    
+    if respuesta.decode() == FIN:                   # El taxi tiene asignado la ID y puede ejercer
+        socketCentral.close()
+        exit()
+
+    else:
+        print("ID asignado al TAXI")
+
 def conectarConServidor():
     global socketCentral
     socketCentral = socket.socket()
     socketCentral.connect((IP_CENTRAL, PUERTO_CENTRAL))
     print("CONECTADO AL SERVIDOR CENTRAL EN [" + IP_CENTRAL + " : " + str(PUERTO_CENTRAL) + "]")
+    validarID(socketCentral)
 
 ############## MAIN ################
 

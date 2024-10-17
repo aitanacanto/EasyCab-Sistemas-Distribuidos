@@ -2,6 +2,10 @@ import socket
 import sys
 import threading
 import math
+import time
+from kafka import KafkaProducer
+from faker import Faker
+import json
 
 ################ LO QUE FALTA ##############
 # Mirar si el fichero que nos dan cumple con las posiciones correctas en el mapa (mapa.txt)
@@ -11,10 +15,6 @@ import math
 #           Ip y puerto de la base de datos [Si utilizamos BBDD (si utilizamos archivos de texto no hace falta)]
 
 FORMAT = 'utf-8'
-
-TAXI_MOVIENDO = 0x40        # Bit 6 en 1 para "moviendo"
-TAXI_PARADO = 0x00          # Bit 6 en 0 para "parado"
-NADA = 0x00                 # Una celda vacía
 
 ANCHO = 20
 ALTO = 20
@@ -38,8 +38,9 @@ mapa = [[' ' for _ in range(10)] for _ in range(10)]
 
 SERVER = socket.gethostbyname(socket.gethostname())
 DIRECCION = (SERVER, PUERTO_ESCUCHA)
-START = "START"
+
 FIN = "FIN"
+OK = "OK"
 
 ############ COSAS ############
 
@@ -57,7 +58,6 @@ def movimientoTaxi(id_taxi, movimiento):                                        
     posAntiguaY = 0
 
     for y in range(ALTO):
-        fila = []
         for x in range(ANCHO): 
             if mapa[x][y] == str(id_taxi):
                 posAntiguaX = x
@@ -97,23 +97,69 @@ def movimientoTaxi(id_taxi, movimiento):                                        
 
     return (posNuevaX, posNuevaY)
 
-
 def comunicacionTaxi():                                                                 # Aquí es donde se manda y se recive la información del DigitalEngine
-    print("Implementar esto con KAFKA:(")           # @Implementar
+    fake= Faker()
+    producer = KafkaProducer(bootstrap_servers=(IP_GESTOR, PUERTO_GESTOR), value_serializer=lambda v: json.dumps(v).encode('utf-8'))
+
+    name=fake.name()
+    producer.send('MAPA',mapa)
+    print(name)
+    time.sleep(0.001)
+
+def validarUbicacion(id_taxi, conn):
+    taxiEncontrado = False
+    nuevasLineas = []
+
+    try:
+        # Leer todas las líneas del archivo de taxis
+        with open(ARCHIVO_TAXI, 'r') as archivo:
+            lineas = archivo.readlines()
+
+        for linea in lineas:
+            datos = linea.strip().replace('<', '').split('>')
+
+            taxi_asignado = datos[0]                        # Estado de asignación (NO o SI)
+            taxi_operativo = datos[1]                       # Estado operativo (NO o SI)
+            taxi_id = datos[2]                              # ID del taxi
+
+            if taxi_id == id_taxi:
+                taxiEncontrado = True
+                if taxi_asignado == "NO" and taxi_operativo == "NO":
+                    print(f"ID {id_taxi} asignado al taxi")
+                    # Cambiar el primer NO por SI
+                    nueva_linea = f"<SI><NO><{taxi_id}><{datos[3]}><{datos[4]}>\n"
+                    nuevasLineas.append(nueva_linea)
+                    conn.send(OK.encode(FORMAT))  # Enviar confirmación al Digital Engine
+                else:
+                    # Si ya está asignado o operativo, dejar la línea como está
+                    nuevasLineas.append(linea)
+            else:
+                # Si no es el taxi buscado, mantener la línea sin cambios
+                nuevasLineas.append(linea)
+
+        if not taxiEncontrado:
+            print(f"ID {id_taxi} no disponible")
+            conn.send(FIN.encode(FORMAT))
+            return
+
+        # Reescribir el archivo de taxis con las líneas actualizadas
+        with open(ARCHIVO_TAXI, 'w') as archivo:
+            archivo.writelines(nuevasLineas)
+
+    except Exception as e:
+        print(f"EXCEPCIÓN ---> No se ha podido comunicar con el taxi: {e}")
 
 def verificacionTaxi(conn, addr):
     print(f"[NUEVA CONEXION] {conn},{addr} CONECTADO")
 
     try:
         mensaje = conn.recv(4096)
-        
-        if mensaje.decode[FORMAT] == FIN:
-            print("CONEXIÓN CON TAXI DESCONECTADO POR PETICIÓN")
-            conn.close()
-            return    
+        id_taxi = mensaje.decode[FORMAT]
 
-        print("Proceso por el que se mira si la ID está operativa y se manda la ubicación del mismo")                                   # @Implementar
-        print("Si no está operativa se le manda a tomar por culo, y que se cierre el programa del Digital Engine junto a su Sensor")    # @Implementar
+        validarUbicacion(id_taxi, conn)
+
+        conn.close()
+        
         print("Hay que cambiar en la base de datos el NO de esa ID por un SI porque pasa a estar asociado")
 
     except Exception as e:
