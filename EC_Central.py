@@ -4,8 +4,7 @@ import threading
 import math
 
 ################ LO QUE FALTA ##############
-# Casi todo :( 
-
+# Mirar si el fichero que nos dan cumple con las posiciones correctas en el mapa (mapa.txt)
 
 # Entradas: Puerto de escucha
 #           Ip y puerto del gestor de colas
@@ -52,8 +51,54 @@ FIN = "FIN"
 
 ############ FUNCIONES #############                 
 
-def comunicacionTaxi():                                                     # Aquí es donde se manda y se recive la información del DigitalEngine
-    print("Implementar esto con KAFKA:(")
+def movimientoTaxi(id_taxi, movimiento):                                                # Movimiento puede ser "A"(Arriba)/"B"(Abajo)/"D"(Derecha)/"I"(Izquierda)
+    print("Cambiar la posición del taxi con esa ID hacia el movimiento que ha hecho")
+    posAntiguaX = 0
+    posAntiguaY = 0
+
+    for y in range(ALTO):
+        fila = []
+        for x in range(ANCHO): 
+            if mapa[x][y] == str(id_taxi):
+                posAntiguaX = x
+                posAntiguaY = y
+                break
+
+    posNuevaX = 0
+    posNuevaY = 0
+
+    if movimiento == "A":
+        posNuevaX = posAntiguaX
+        if posAntiguaY == 0:
+            posNuevaY = ALTO - 1
+        else: 
+            posNuevaY = posAntiguaY - 1
+            
+    elif movimiento == "B":
+        posNuevaX = posAntiguaX
+        if posAntiguaY == ALTO-1:
+            posNuevaY = 0
+        else:  
+            posNuevaY = posAntiguaY + 1
+
+    elif movimiento == "D":
+        posNuevaY = posAntiguaY
+        if posAntiguaX == ANCHO-1:
+            posNuevaX = 0
+        else:
+            posNuevaX = posAntiguaX + 1
+
+    else:
+        posAntiguaY = posAntiguaY
+        if posAntiguaX == 0:
+            posNuevaX = ANCHO - 1
+        else:
+            posNuevaX = posAntiguaX - 1
+
+
+
+def comunicacionTaxi():                                                                 # Aquí es donde se manda y se recive la información del DigitalEngine
+    print("Implementar esto con KAFKA:(")           # @Implementar
 
 def verificacionTaxi(conn, addr):
     print(f"[NUEVA CONEXION] {conn},{addr} CONECTADO")
@@ -136,7 +181,7 @@ def actualizarPosicionTaxiFichero(id_taxi, nuevo_x, nuevo_y, finalizado):       
     with open(ARCHIVO_TAXI, 'w') as archivo:
         archivo.writelines(nuevasLineas)
 
-def hayTaxisDisponibles(cliente_x, cliente_y):                              # Sé pasa por parámetro la posición del cliente para escoger el taxi más cercano
+def hayTaxisDisponibles(cliente_x, cliente_y):                                          # Sé pasa por parámetro la posición del cliente para escoger el taxi más cercano
 
     with open(ARCHIVO_TAXI, 'r') as archivo:
         lineas = archivo.readlines()
@@ -174,7 +219,7 @@ def hayTaxisDisponibles(cliente_x, cliente_y):                              # S�
         print("No se encuentran Taxis libres")     # @implementar
         return None
 
-def mostrarMapa(mapa):                                                      # GESTION MATRIZ
+def mostrarMapa(mapa):                                                                  # GESTION MATRIZ
     for y in range(ALTO):
         fila = []
         for x in range(ANCHO): 
@@ -200,15 +245,15 @@ def inicMapa(mapa):
 
 arrayPos = []
 
-with open(ARCHIVO_MAPA, 'r') as archivo:                                    # Leer el archivo mapa.txt
+with open(ARCHIVO_MAPA, 'r') as archivo:                                                # Leer el archivo mapa.txt
     for linea in archivo:
         # Usar split() para manejar espacios en blanco
         datos = linea.strip().replace('<', '').replace('>', '').split()
         
         if len(datos) == 3:  # Asegúrate de que haya exactamente 3 elementos
             id_localizacion = datos[0]  # Puede ser letra o número
-            posicion_x = int(datos[1])    # Convertir a entero
-            posicion_y = int(datos[2])    # Convertir a entero
+            posicion_x = int(datos[1])-1    # Convertir a entero                        # ¡POSIBLE ERROR inicializar sitios con -1!
+            posicion_y = int(datos[2])-1    # Convertir a entero    
 
             arrayPos.append({
                 'id': id_localizacion,
