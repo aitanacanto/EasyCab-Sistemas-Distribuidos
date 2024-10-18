@@ -43,10 +43,6 @@ ID_TAXI = argumentos[7]
 
 ############ FUNCIONES #############
 
-############# FUNCION CONSUMIDOR DE KAFKA #############
-
-
-
 def recibirActualizacionMapa():
     # Configuración del consumer
     consumer = KafkaConsumer(
@@ -63,9 +59,11 @@ def recibirActualizacionMapa():
         print(f"Mapa recibido de central: {mapa}")
         # Aquí puedes procesar el mapa como lo necesites dentro del DigitalEngine
         # Por ejemplo, actualizar el mapa local del taxi
-
+    return
 
 def recibirPosicionCliente():
+    global cliente
+
     # Configuración del consumer
     consumer = KafkaConsumer(
         'procesar_viaje',                              # El tópico desde el que va a consumir
@@ -74,18 +72,27 @@ def recibirPosicionCliente():
         auto_offset_reset='earliest',                   # Consume desde el principio si no hay offset
     )
 
-    return consumer.message
+    for message in consumer:
+        info = message.value                           # Extraemos el mapa (array de strings)
+        taxi_id = info['taxi_id']
+
+        if taxi_id == ID_TAXI:
+            cliente[0] = info['x']
+            cliente[1] = info['y']
+            return
+        
+    return 
 
 
 # Enviar actualizaciones del taxi
-def actualizar_taxi_status(taxi_id, status):
+def actualizar_taxi_status(taxi_id, posicion):
     producerTAXI = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
     topic = 'actualizaciones_taxi'
-    message = {'taxi_id': taxi_id, 'status': status}
+    message = {'taxi_id': taxi_id, 'taxi_posicion': posicion}
     producerTAXI.send(topic, message)
     producerTAXI.flush()
 
-
+    return 
 
 def mostrarMapa(mapa):
     for y in range(ALTO):
@@ -94,6 +101,8 @@ def mostrarMapa(mapa):
             fila.append(mapa[x][y])
 
         print(' '.join(fila))
+
+    return
 
 def conexionSensor():
     socketSensor = socket.socket()
@@ -121,6 +130,8 @@ def conexionSensor():
 
     conexion.close()
     socketSensor.close()
+    
+    return 
 
 def actualizarPosicion(cliente, destino, objetivo):                 # Objetivo puede ser "C" o "D" dependiendo si el taxi va a recoger al cliente o va al destino
     if objetivo == "C":
@@ -174,12 +185,15 @@ def validarID():
     else:
         print("ID asignado al TAXI")
 
+    return 
+
 def conectarConServidor():
     global socketCentral
     socketCentral = socket.socket()
     socketCentral.connect((IP_CENTRAL, PUERTO_CENTRAL))
     print("CONECTADO AL SERVIDOR CENTRAL EN [" + IP_CENTRAL + " : " + str(PUERTO_CENTRAL) + "]")
     validarID(socketCentral)
+    return 
 
 ############## MAIN ################
 

@@ -43,33 +43,15 @@ DIRECCION = (SERVER, PUERTO_ESCUCHA)
 FIN = "FIN"
 OK = "OK"
 
-############ COSAS ############
-
-# @KAFKA -> Enviar el mapa al DigitalEngine
-#time.sleep(1)
-# @KAFKA -> Recibir el mapa actualizado del DigitalEngine
-#if msg == FIN:
-#    conectado = False
-
 ############ FUNCIONES #############     
-# 
 
-
-
-def actualizacionTaxis(mapa):  # Se pasa "mapa" como parámetro, que es un array de strings
+def enviarMensajeTaxiMapa(mapa):  # Se pasa "mapa" como parámetro, que es un array de strings
 
     producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
     producerTaxi.send('actualizar_mapa', mapa)
     producerTaxi.flush()  
 
-
-#def actualizacionCustomers(customer_id, message):
-    #producerCustomer = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
-    #topic = f'customer_{customer_id}_updates'
-    #producerCustomer.send(topic, message)
-    #producerCustomer.flush()
-
-def escuchar_actualizaciones_taxi():
+def recibirMensajeTaxi():
     # Configuración del consumidor
     consumer = KafkaConsumer(
         'actualizaciones_taxi',                         # El tópico desde el que se consumen los mensajes
@@ -83,12 +65,10 @@ def escuchar_actualizaciones_taxi():
     for message in consumer:
         taxi_status = message.value                     # Obtener el contenido del mensaje
         taxi_id = taxi_status['taxi_id']
-        status = taxi_status['status']
-        print(f"Actualización recibida para Taxi {taxi_id}: {status}")
-        # Aquí puedes procesar la actualización del taxi, por ejemplo:
-        # - Actualizar estado en la base de datos
-        # - Realizar acciones según el estado recibido
-
+        taxi_posicion = taxi_status['taxi_posicion']
+        # print(f"Actualización recibida para Taxi {taxi_id}: {taxi_posicion}")
+    
+    return (taxi_id, taxi_posicion)
 
 def movimientoTaxi(id_taxi, movimiento):                                                # Movimiento puede ser "A"(Arriba)/"B"(Abajo)/"D"(Derecha)/"I"(Izquierda)
     print("Cambiar la posición del taxi con esa ID hacia el movimiento que ha hecho")
@@ -134,8 +114,6 @@ def movimientoTaxi(id_taxi, movimiento):                                        
             posNuevaX = posAntiguaX - 1
 
     return (posNuevaX, posNuevaY)
-
-
 
 def validarUbicacion(id_taxi, conn):
     taxiEncontrado = False
@@ -270,7 +248,7 @@ def recibirPeticionesCustomers():
 
     return consumer
 
-def procesar_peticion_customer():
+def procesar_peticion_customer():                       # Cola CENTRAL-TAXI informar cliente
 
     cliente = recibirPeticionesCustomers()
     src = cliente[1]
@@ -278,6 +256,7 @@ def procesar_peticion_customer():
     cliente_y = src[1]
 
     taxiAsignado = hayTaxisDisponibles(cliente_x, cliente_y)
+
     if taxiAsignado:
         producer_taxi_escogido = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
         topic = 'procesar_viaje'
