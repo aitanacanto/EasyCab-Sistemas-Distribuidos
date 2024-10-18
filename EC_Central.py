@@ -3,7 +3,8 @@ import sys
 import threading
 import math
 import time
-from kafka import KafkaProducer
+from kafka import KafkaProducer, KafkaConsumer
+
 from faker import Faker
 import json
 
@@ -50,7 +51,44 @@ OK = "OK"
 #if msg == FIN:
 #    conectado = False
 
-############ FUNCIONES #############                 
+############ FUNCIONES #############     
+# 
+
+
+
+def actualizacionTaxis(mapa):  # Se pasa "mapa" como parámetro, que es un array de strings
+
+    producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
+    producerTaxi.send('actualizar_mapa', mapa)
+    producerTaxi.flush()  
+
+
+#def actualizacionCustomers(customer_id, message):
+    #producerCustomer = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
+    #topic = f'customer_{customer_id}_updates'
+    #producerCustomer.send(topic, message)
+    #producerCustomer.flush()
+
+def escuchar_actualizaciones_taxi():
+    # Configuración del consumidor
+    consumer = KafkaConsumer(
+        'actualizaciones_taxi',                         # El tópico desde el que se consumen los mensajes
+        bootstrap_servers='localhost:9092',             # Broker de Kafka
+        value_deserializer=lambda v: json.loads(v.decode('utf-8')),  # Deserializar los datos JSON
+        auto_offset_reset='earliest',                   # Leer desde el principio si no hay offset
+        group_id='central_group'                        # Grupo de consumidores
+    )
+
+    # Bucle para recibir y procesar mensajes
+    for message in consumer:
+        taxi_status = message.value                     # Obtener el contenido del mensaje
+        taxi_id = taxi_status['taxi_id']
+        status = taxi_status['status']
+        print(f"Actualización recibida para Taxi {taxi_id}: {status}")
+        # Aquí puedes procesar la actualización del taxi, por ejemplo:
+        # - Actualizar estado en la base de datos
+        # - Realizar acciones según el estado recibido
+
 
 def movimientoTaxi(id_taxi, movimiento):                                                # Movimiento puede ser "A"(Arriba)/"B"(Abajo)/"D"(Derecha)/"I"(Izquierda)
     print("Cambiar la posición del taxi con esa ID hacia el movimiento que ha hecho")
@@ -97,14 +135,7 @@ def movimientoTaxi(id_taxi, movimiento):                                        
 
     return (posNuevaX, posNuevaY)
 
-def comunicacionTaxi():                                                                 # Aquí es donde se manda y se recive la información del DigitalEngine
-    fake= Faker()
-    producer = KafkaProducer(bootstrap_servers=(IP_GESTOR, PUERTO_GESTOR), value_serializer=lambda v: json.dumps(v).encode('utf-8'))
 
-    name=fake.name()
-    producer.send('MAPA',mapa)
-    print(name)
-    time.sleep(0.001)
 
 def validarUbicacion(id_taxi, conn):
     taxiEncontrado = False
@@ -228,7 +259,35 @@ def actualizarPosicionTaxiFichero(id_taxi, nuevo_x, nuevo_y, finalizado):       
     with open(ARCHIVO_TAXI, 'w') as archivo:
         archivo.writelines(nuevasLineas)
 
-def hayTaxisDisponibles(cliente_x, cliente_y):                                          # Sé pasa por parámetro la posición del cliente para escoger el taxi más cercano
+def recibirPeticionesCustomers():
+
+    consumer = KafkaConsumer(
+        'solicitud_taxi',                              # El tópico desde el que va a consumir
+        bootstrap_servers='localhost:9092',             # Broker de Kafka
+        value_deserializer=lambda v: json.loads(v.decode('utf-8')),  # Decodifica los mensajes recibidos
+        auto_offset_reset='earliest',                   # Consume desde el principio si no hay offset
+    )
+
+    return consumer
+
+def procesar_peticion_customer():
+
+    cliente = recibirPeticionesCustomers()
+    src = cliente[1]
+    cliente_x = src[0]
+    cliente_y = src[1]
+
+    taxiAsignado = hayTaxisDisponibles(cliente_x, cliente_y)
+    if taxiAsignado:
+        producer_taxi_escogido = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
+        topic = 'procesar_viaje'
+        message = {'taxi_id': taxiAsignado[0],'x': cliente_x, 'y': cliente_y}
+        producer_taxi_escogido.send(topic, message)
+        producer_taxi_escogido.flush()
+        print("Enviando el taxi más cercano, Taxi: ", taxiAsignado[0])
+
+
+def hayTaxisDisponibles(cliente_x, cliente_y): # Sé pasa por parámetro la posición del cliente para escoger el taxi más cercano
 
     with open(ARCHIVO_TAXI, 'r') as archivo:
         lineas = archivo.readlines()
@@ -258,7 +317,6 @@ def hayTaxisDisponibles(cliente_x, cliente_y):                                  
                 taxiMasCercano = (taxi_id, taxi_x, taxi_y)
 
     if taxiMasCercano:
-        print("Enviando al taxi más cercano")
         print("Cambiar el NO por el SI en la operatividad del taxi (posición 2)")   # @Implementar
         return taxiMasCercano
 
@@ -314,6 +372,7 @@ meterTaxisBaseDatos(arrayPos)
 inicMapa(mapa)
 mostrarMapa(mapa)
 print("[EMPEZANDO] Servidor inicializando...")
+
 
 # Creamos el hilo para los Taxis y la ejecutamos
 hiloTaxi = threading.Thread(target=conexionTaxi)

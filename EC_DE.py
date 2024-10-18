@@ -2,7 +2,7 @@ import socket
 import sys
 import threading
 import time
-from kafka import KafkaConsumer
+from kafka import KafkaConsumer, KafkaProducer
 import json
 
 ################ LO QUE FALTA ##############
@@ -15,6 +15,7 @@ import json
 #           IP y Puerto del gestor de colas
 #           Ip y Puerto del Sensor
 #           Id del taxi
+
 
 if len(sys.argv) != 8:
     print("ERROR: Número de argumentos arróneos")    
@@ -42,6 +43,50 @@ ID_TAXI = argumentos[7]
 
 ############ FUNCIONES #############
 
+############# FUNCION CONSUMIDOR DE KAFKA #############
+
+
+
+def recibirActualizacionMapa():
+    # Configuración del consumer
+    consumer = KafkaConsumer(
+        'actualizar_mapa',                              # El tópico desde el que va a consumir
+        bootstrap_servers='localhost:9092',             # Broker de Kafka
+        value_deserializer=lambda v: json.loads(v.decode('utf-8')),  # Decodifica los mensajes recibidos
+        auto_offset_reset='earliest',                   # Consume desde el principio si no hay offset
+        group_id='taxi_group'                           # Agrupamos consumidores si hay varios taxis
+    )
+
+    # Ciclo para recibir y procesar los mensajes
+    for message in consumer:
+        mapa = message.value                            # Extraemos el mapa (array de strings)
+        print(f"Mapa recibido de central: {mapa}")
+        # Aquí puedes procesar el mapa como lo necesites dentro del DigitalEngine
+        # Por ejemplo, actualizar el mapa local del taxi
+
+
+def recibirPosicionCliente():
+    # Configuración del consumer
+    consumer = KafkaConsumer(
+        'procesar_viaje',                              # El tópico desde el que va a consumir
+        bootstrap_servers='localhost:9092',             # Broker de Kafka
+        value_deserializer=lambda v: json.loads(v.decode('utf-8')),  # Decodifica los mensajes recibidos
+        auto_offset_reset='earliest',                   # Consume desde el principio si no hay offset
+    )
+
+    return consumer.message
+
+
+# Enviar actualizaciones del taxi
+def actualizar_taxi_status(taxi_id, status):
+    producerTAXI = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
+    topic = 'actualizaciones_taxi'
+    message = {'taxi_id': taxi_id, 'status': status}
+    producerTAXI.send(topic, message)
+    producerTAXI.flush()
+
+
+
 def mostrarMapa(mapa):
     for y in range(ALTO):
         fila = []
@@ -68,7 +113,8 @@ def conexionSensor():
 
             print("Mensaje Sensor entrante: [" + mensaje.decode() + "]")
 
-            mandarMensajeCentral()
+            #mandarMensajeCentral()
+            actualizar_taxi_status(ID_TAXI, )
     
         except Exception as e:
             break
@@ -117,40 +163,6 @@ def actualizarPosicion(cliente, destino, objetivo):                 # Objetivo p
 
     return posicionFinal
 
-def mandarMensajeCentral():
-
-    try:
-        # Recibir respuesta de la central
-        # @KAFKA -> Recibe el mapa del servidor
-
-        # @descomentar
-        """
-        if not mapa:                                    # Si no se recibe nada, cerrar conexión
-            print("No se recibió respuesta. Cerrando conexión.")
-            conn.close()
-            return
-
-        # Implementa la actualización del taxi
-        if mapa.decode('utf-8') == FIN:                 # Acabar la conexión cuando el servidor mande un FIN
-            print("CONEXIÓN CERRADA CON LA CENTRAL")
-            return 
-
-        mostrarMapa(mapa)                               # Recibo el mapa desde la central
-
-        """
-        # Actualizamos el mapa (moviendo al taxi hasta su objetivo)
-
-        cliente = (12,8)
-        destino = (5,5)                                  # @Implementar -> Pasar el destino del taxi (puede ser el cliente o el destino)
-        objetivo = 'C'                                   # Objetivo = 'c': El destino del taxi es el cliente / 'D': El destino del taxi es el final
-        actualizarPosicion(cliente, destino, objetivo)
-
-        # @KAFKA -> Envía el mapa actualizado al servidor
-
-    except Exception as e:
-        print(f"Error en la comunicación con la central: {e}")
-        return 
-
 def validarID():
     socketCentral.send(ID_TAXI.encode())            # Manda a central "START" para que este le mande si la ID solicitada está disponible
     respuesta = socketCentral.recv(4096)
@@ -179,24 +191,6 @@ hiloSensor.start()
 
 hiloSensor.join()
 
-############# FUNCION CONSUMIDOR DE KAFKA #############
-
-def consumidorKafka():
-    consumer = KafkaConsumer(
-        'asignaciones_taxi',
-        bootstrap_servers=['localhost:9092'],
-        auto_offset_reset='earliest',
-        enable_auto_commit=True,
-        group_id='grupo_taxis',
-        value_deserializer=lambda x: json.loads(x.decode('utf-8'))
-    )
-
-    print("Esperando asignaciones de taxis...")
-    for message in consumer:
-        asignacion = message.value
-        print(f"Asignación recibida: Taxi asignado a {asignacion['cliente_id']} desde {asignacion['ubicacion']} a {asignacion['destino']}")
-        # Aquí puedes implementar la lógica para mover el taxi o responder a la asignación.
-
 ############## MAIN ################
 
 conectarConServidor()  # Servidor conectado con el DigitalEngine
@@ -206,8 +200,7 @@ hiloSensor = threading.Thread(target=conexionSensor)
 hiloSensor.start()
 
 # Hilo para el consumidor de Kafka
-hiloKafka = threading.Thread(target=consumidorKafka)
-hiloKafka.start()
+
 
 # Esperar que el hilo del sensor termine (puedes cambiar esto según tu lógica)
 hiloSensor.join()

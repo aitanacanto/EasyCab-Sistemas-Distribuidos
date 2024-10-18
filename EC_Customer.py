@@ -19,8 +19,8 @@ def enviar_solicitud_taxi(cliente_id, ubicacion, destino):
         "destino": destino
     }
     
-    producer.send('solicitudes_taxi', solicitud)
-    print(f"Solicitud enviada: {solicitud}")
+    producer.send('solicitud_taxi', solicitud)
+    print(f"Solicitud enviada")
     producer.flush()
     
 # Función para procesar los datos del formulario
