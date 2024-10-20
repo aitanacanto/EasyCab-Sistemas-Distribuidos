@@ -41,6 +41,15 @@ PUERTO_SENSOR = int(argumentos[6])
 
 ID_TAXI = argumentos[7]
 
+# Esto es la ubicación del taxi en el mapa
+global ubicacion
+
+# Esto es un array, [0] -> posCliente, [1] -> posDestino
+global cliente
+
+# Booleano, dice si el cliente está ya en el taxi (True) o está yendo hacia él (False)
+global clienteDentro
+
 ############ FUNCIONES #############
 
 def recibirActualizacionMapa():
@@ -61,6 +70,7 @@ def recibirActualizacionMapa():
         # Por ejemplo, actualizar el mapa local del taxi
     return
 
+# Cambia la variable global cliente
 def recibirPosicionCliente():
     global cliente
 
@@ -77,15 +87,14 @@ def recibirPosicionCliente():
         taxi_id = info['taxi_id']
 
         if taxi_id == ID_TAXI:
-            cliente[0] = info['x']
-            cliente[1] = info['y']
+            cliente[0] = info['posCliente']
+            cliente[1] = info['posDestino']
             return
         
     return 
 
-
 # Enviar actualizaciones del taxi
-def actualizar_taxi_status(taxi_id, posicion):
+def enviarPosicionTaxi(taxi_id, posicion):
     producerTAXI = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
     topic = 'actualizaciones_taxi'
     message = {'taxi_id': taxi_id, 'taxi_posicion': posicion}
@@ -133,46 +142,63 @@ def conexionSensor():
     
     return 
 
-def actualizarPosicion(cliente, destino, objetivo):                 # Objetivo puede ser "C" o "D" dependiendo si el taxi va a recoger al cliente o va al destino
-    if objetivo == "C":
-        final = cliente
+def movimiento(posX, posY, objetivo, movimiento):
+    if movimiento == "Vertical":
+        ubicacion = posY
+        destino = objetivo[1]
     else:
-        final = destino
-
-    caminoMinimo = " "
-
-    if cliente[0] != final[0]:                                      # Aquí nos movemos en horizontal
-        posInicial = cliente[0]
-        posFinal = final[0]
-        movimiento = "HORIZONTAL"
-    else:
-        posInicial = cliente[1]
-        posFinal = final[1]
-        movimiento = "VERTICAL"
-
-
-    caminoPorDentro = abs(posInicial - posFinal)                # Movimiento si va por dentro del mapa
-    caminoPorFuera = ANCHO - caminoPorDentro                    # Movimiento si va por fuera del mapa, pj sale de la derecha y entra por la izquierda
-
-    if caminoPorFuera < caminoPorDentro:
-        caminoMinimo = "FUERA"
-    else:
-        caminoMinimo = "DENTRO"
-
-
-    if movimiento == "HORIZONTAL":
-        if (posInicial < posFinal and caminoMinimo == "DENTRO") or (posInicial > posFinal and caminoMinimo == "FUERA"):
-            posicionFinal = (cliente[0]+1, cliente[1])              # Se mueve a la derecha
-        else:
-            posicionFinal = (cliente[0]-1, cliente[1])              # Se mueve a la izquierda
+        ubicacion = posX
+        destino = objetivo[0]
     
-    else:
-        if (posInicial < posFinal and caminoMinimo == "DENTRO") or (posInicial > posFinal and caminoMinimo == "FUERA"):
-            posicionFinal = (cliente[0], cliente[1]+1)              # Se mueve a la derecha
-        else:
-            posicionFinal = (cliente[0], cliente[1]-1)              # Se mueve a la izquierda
+    posNueva = 0
 
-    return posicionFinal
+    distanciaDirecta = abs(ubicacion - destino)
+    distanciaPorFuera = ALTO - distanciaDirecta
+
+    if distanciaDirecta < distanciaPorFuera:
+        if ubicacion < destino:
+            if ubicacion == ANCHO-1:
+                posNueva = 0
+            else:
+                posNueva = ubicacion+1
+        else:
+            if ubicacion == 0:
+                posNueva = ANCHO-1
+            else:
+                posNueva = ubicacion-1
+    else:
+        if ubicacion < destino:
+            if ubicacion == ANCHO-1:
+                posNueva = 0
+            else:
+                posNueva = ubicacion-1
+        else:
+            if ubicacion == ANCHO-1:
+                posNueva = 0
+            else:
+                posNueva = ubicacion+1
+
+    if movimiento == "Vertical":
+        return (posX, posNueva)
+    else:
+        return (posNueva, posY)
+
+def actualizarPosicion(cliente, destino, mapa):                                
+    global ubicacion
+    global clienteDentro
+
+    posX = ubicacion[0]
+    posY = ubicacion[1]
+
+    if clienteDentro:
+        objetivo = destino
+    else:
+        objetivo = cliente
+
+    if posX == objetivo[0]:
+        return movimiento(posX, posY, objetivo, "Vertical")
+    else:
+        return movimiento(posX, posY, objetivo, "Horizontal")
 
 def validarID():
     socketCentral.send(ID_TAXI.encode())            # Manda a central "START" para que este le mande si la ID solicitada está disponible
@@ -194,16 +220,6 @@ def conectarConServidor():
     print("CONECTADO AL SERVIDOR CENTRAL EN [" + IP_CENTRAL + " : " + str(PUERTO_CENTRAL) + "]")
     validarID(socketCentral)
     return 
-
-############## MAIN ################
-
-conectarConServidor()       # Conectamos el servidor con el DigitalEngine
-
-# Creamos el hilo al Sensor y la ejecutamos
-hiloSensor = threading.Thread(target=conexionSensor)
-hiloSensor.start()
-
-hiloSensor.join()
 
 ############## MAIN ################
 

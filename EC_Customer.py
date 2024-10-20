@@ -12,11 +12,13 @@ producer = KafkaProducer(bootstrap_servers=['localhost:9092'],
                          value_serializer=json_serializer)
 
 # Función para enviar la solicitud de taxi
-def enviar_solicitud_taxi(cliente_id, ubicacion, destino):
+def enviar_solicitud_taxi(cliente_id, ubicacion_x, ubicacion_y, destino_x, destino_y):
     solicitud = {
         "cliente_id": cliente_id,
-        "ubicacion": ubicacion,
-        "destino": destino
+        "ubicacion_x": ubicacion_x,
+        "ubicacion_y": ubicacion_y,
+        "destino_x": destino_x,
+        "destino_y": destino_y
     }
     
     producer.send('solicitud_taxi', solicitud)

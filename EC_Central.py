@@ -8,12 +8,16 @@ from kafka import KafkaProducer, KafkaConsumer
 from faker import Faker
 import json
 
-################ LO QUE FALTA ##############
-# Mirar si el fichero que nos dan cumple con las posiciones correctas en el mapa (mapa.txt)
-
 # Entradas: Puerto de escucha
 #           Ip y puerto del gestor de colas
 #           Ip y puerto de la base de datos [Si utilizamos BBDD (si utilizamos archivos de texto no hace falta)]
+
+############# APUNTES #############
+
+# CENTRAL <-> DE (para mapa/posición actualizado): actualizaciones_taxi
+# CENTRAL --> DE (para ordenes de clientes)
+
+###################################
 
 FORMAT = 'utf-8'
 
@@ -43,78 +47,43 @@ DIRECCION = (SERVER, PUERTO_ESCUCHA)
 FIN = "FIN"
 OK = "OK"
 
-############ FUNCIONES #############     
+############ FUNCIONES #############
 
-def enviarMensajeTaxiMapa(mapa):  # Se pasa "mapa" como parámetro, que es un array de strings
-
+def enviarMensajeTaxiMapa(mapa):                                            # ENVIO A TAXI      Envia mapa actualizado
     producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
     producerTaxi.send('actualizar_mapa', mapa)
     producerTaxi.flush()  
+    return
 
-def recibirMensajeTaxi():
+def enviarMensajeTaxiOrden(taxi_id, cliente, destino):                      # ENVIO A TAXI      Envia tanto el cliente a quien tiene que recoger como al destino al que tiene que irs
+    producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
+    topic = 'peticion_servicio'
+    message = {'taxi_id': taxi_id, 'posCliente': cliente, 'posDestino': destino}
+    producerTaxi.send(topic, message)
+    producerTaxi.flush()  
+    return
+
+# return (taxi_id, taxi_posicion)
+def recibirMensajeTaxi():                                                   # RECIBIR DE TAXI
     # Configuración del consumidor
     consumer = KafkaConsumer(
-        'actualizaciones_taxi',                         # El tópico desde el que se consumen los mensajes
-        bootstrap_servers='localhost:9092',             # Broker de Kafka
-        value_deserializer=lambda v: json.loads(v.decode('utf-8')),  # Deserializar los datos JSON
-        auto_offset_reset='earliest',                   # Leer desde el principio si no hay offset
-        group_id='central_group'                        # Grupo de consumidores
+        'actualizaciones_taxi',                                             # El tópico desde el que se consumen los mensajes
+        bootstrap_servers='localhost:9092',                                 # Broker de Kafka
+        value_deserializer=lambda v: json.loads(v.decode('utf-8')),         # Deserializar los datos JSON
+        auto_offset_reset='earliest',                                       # Leer desde el principio si no hay offset
+        group_id='central_group'                                            # Grupo de consumidores
     )
 
     # Bucle para recibir y procesar mensajes
     for message in consumer:
-        taxi_status = message.value                     # Obtener el contenido del mensaje
+        taxi_status = message.value                                         # Obtener el contenido del mensaje
         taxi_id = taxi_status['taxi_id']
         taxi_posicion = taxi_status['taxi_posicion']
         # print(f"Actualización recibida para Taxi {taxi_id}: {taxi_posicion}")
     
     return (taxi_id, taxi_posicion)
 
-def movimientoTaxi(id_taxi, movimiento):                                                # Movimiento puede ser "A"(Arriba)/"B"(Abajo)/"D"(Derecha)/"I"(Izquierda)
-    print("Cambiar la posición del taxi con esa ID hacia el movimiento que ha hecho")
-    posAntiguaX = 0
-    posAntiguaY = 0
-
-    for y in range(ALTO):
-        for x in range(ANCHO): 
-            if mapa[x][y] == str(id_taxi):
-                posAntiguaX = x
-                posAntiguaY = y
-                break
-
-    posNuevaX = 0
-    posNuevaY = 0
-
-    if movimiento == "A":
-        posNuevaX = posAntiguaX
-        if posAntiguaY == 0:
-            posNuevaY = ALTO - 1
-        else: 
-            posNuevaY = posAntiguaY - 1
-            
-    elif movimiento == "B":
-        posNuevaX = posAntiguaX
-        if posAntiguaY == ALTO-1:
-            posNuevaY = 0
-        else:  
-            posNuevaY = posAntiguaY + 1
-
-    elif movimiento == "D":
-        posNuevaY = posAntiguaY
-        if posAntiguaX == ANCHO-1:
-            posNuevaX = 0
-        else:
-            posNuevaX = posAntiguaX + 1
-
-    else:
-        posAntiguaY = posAntiguaY
-        if posAntiguaX == 0:
-            posNuevaX = ANCHO - 1
-        else:
-            posNuevaX = posAntiguaX - 1
-
-    return (posNuevaX, posNuevaY)
-
+########## SOCKET PARA CONEXIÓN CON TAXIS ##########
 def validarUbicacion(id_taxi, conn):
     taxiEncontrado = False
     nuevasLineas = []
@@ -157,7 +126,6 @@ def validarUbicacion(id_taxi, conn):
 
     except Exception as e:
         print(f"EXCEPCIÓN ---> No se ha podido comunicar con el taxi: {e}")
-
 def verificacionTaxi(conn, addr):
     print(f"[NUEVA CONEXION] {conn},{addr} CONECTADO")
 
@@ -176,7 +144,6 @@ def verificacionTaxi(conn, addr):
 
     print("CONEXIÓN CON TAXI DESCONECTADO")
     conn.close()
-
 def startTaxi(server):
     server.listen()
     print(f"[ESCUCHANDO] Servidor a la escucha en {SERVER}")
@@ -192,11 +159,12 @@ def startTaxi(server):
             print("OOppsss... DEMASIADAS CONEXIONES. ESPERANDO A QUE ALGUIEN SE VAYA")
             conn.send("OOppsss... DEMASIADAS CONEXIONES. Tendrás que esperar a que alguien se vaya".encode(FORMAT))
             conn.close()
-
 def conexionTaxi():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind(DIRECCION)
     startTaxi(server)
+####################################################
+
 
 def actualizarPosicionTaxiFichero(id_taxi, nuevo_x, nuevo_y, finalizado):               # Se actualiza la posición del taxi en la base de datos, se ejecuta cada segundo (finalizado es un bool, dice si se ha acabado el viaje)
     with open(ARCHIVO_TAXI, 'r') as archivo:
@@ -237,42 +205,63 @@ def actualizarPosicionTaxiFichero(id_taxi, nuevo_x, nuevo_y, finalizado):       
     with open(ARCHIVO_TAXI, 'w') as archivo:
         archivo.writelines(nuevasLineas)
 
-def recibirPeticionesCustomers():
+def existeMismaID(customer_id, mapa):
+    for y in range(ALTO):
+        fila = []
+        for x in range(ANCHO): 
+            if mapa[x][y] == customer_id:
+                return True
+    return False
+
+# return (posCliente, posDestino)
+def recibirPeticionesCustomers(mapa):                                           # RECIBIR DE CUSTOMER
 
     consumer = KafkaConsumer(
-        'solicitud_taxi',                              # El tópico desde el que va a consumir
-        bootstrap_servers='localhost:9092',             # Broker de Kafka
-        value_deserializer=lambda v: json.loads(v.decode('utf-8')),  # Decodifica los mensajes recibidos
-        auto_offset_reset='earliest',                   # Consume desde el principio si no hay offset
+        'solicitud_taxi',                                                       # El tópico desde el que va a consumir
+        bootstrap_servers='localhost:9092',                                     # Broker de Kafka
+        value_deserializer=lambda v: json.loads(v.decode('utf-8')),             # Decodifica los mensajes recibidos
+        auto_offset_reset='earliest',                                           # Consume desde el principio si no hay offset
     )
 
-    return consumer
+    for message in consumer:
+        info = message.value
+        customer_id = info['cliente_id']
+        
+        if not existeMismaID(customer_id, mapa):
+            return [customer_id, info['ubicacion_x'], info['ubicacion_y'], info['destino_x'], info['destino_y']]
 
-def procesar_peticion_customer():                       # Cola CENTRAL-TAXI informar cliente
+    return None
 
-    cliente = recibirPeticionesCustomers()
-    src = cliente[1]
-    cliente_x = src[0]
-    cliente_y = src[1]
+def procesar_peticion_customer():                                               # Cola CENTRAL-TAXI informar cliente
 
-    taxiAsignado = hayTaxisDisponibles(cliente_x, cliente_y)
+    src = recibirPeticionesCustomers()
+    if src:
+        cliente_id = src[0]
+        cliente_x = src[1]
+        cliente_y = src[2]
+        destino_x = src[3]
+        destino_y = src[4]
 
-    if taxiAsignado:
-        producer_taxi_escogido = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
-        topic = 'procesar_viaje'
-        message = {'taxi_id': taxiAsignado[0],'x': cliente_x, 'y': cliente_y}
-        producer_taxi_escogido.send(topic, message)
-        producer_taxi_escogido.flush()
-        print("Enviando el taxi más cercano, Taxi: ", taxiAsignado[0])
+        taxiAsignado = hayTaxisDisponibles(cliente_x, cliente_y)
 
+        if taxiAsignado:
+            producer_taxi_escogido = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
+            topic = 'procesar_viaje'
+            message = {'taxi_id': taxiAsignado[0],'posCliente': (cliente_x, cliente_y), 'posDestino': (destino_x, destino_y)}
+            producer_taxi_escogido.send(topic, message)
+            producer_taxi_escogido.flush()
+            print("Enviando el taxi más cercano, Taxi: ", taxiAsignado[0])
+        else:
+            print("ERROR: no hay taxis disponibles")
+    else:
+        print("ERROR: ya hay un cliente con el mismo ID en el mapa")
 
-def hayTaxisDisponibles(cliente_x, cliente_y): # Sé pasa por parámetro la posición del cliente para escoger el taxi más cercano
+def hayTaxisDisponibles(cliente_x, cliente_y):                                  # Sé pasa por parámetro la posición del cliente para escoger el taxi más cercano
 
     with open(ARCHIVO_TAXI, 'r') as archivo:
         lineas = archivo.readlines()
 
     if not lineas:
-        print("NO HAY TAXIS :(")            # @implementar
         return None
 
     taxiMasCercano = None
@@ -300,7 +289,6 @@ def hayTaxisDisponibles(cliente_x, cliente_y): # Sé pasa por parámetro la posi
         return taxiMasCercano
 
     else:
-        print("No se encuentran Taxis libres")     # @implementar
         return None
 
 def mostrarMapa(mapa):                                                                  # GESTION MATRIZ
@@ -349,7 +337,7 @@ with open(ARCHIVO_MAPA, 'r') as archivo:                                        
 
 meterTaxisBaseDatos(arrayPos)
 inicMapa(mapa)
-mostrarMapa(mapa)
+
 print("[EMPEZANDO] Servidor inicializando...")
 
 
