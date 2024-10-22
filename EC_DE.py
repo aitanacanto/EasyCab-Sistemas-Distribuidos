@@ -19,7 +19,7 @@ import json
 
 if len(sys.argv) != 8:
     print("ERROR: Número de argumentos arróneos")    
-    print("Formato correcto -> python3 EC_DE <IP central> <Puerto central> <IP gestor> <Puerto central> <IP Sensor> <Puerto Sensor> <ID Taxi>")
+    print("Formato correcto -> python3 EC_DE <IP central> <Puerto central> <IP gestor> <Puerto gestor> <IP Sensor> <Puerto Sensor> <ID Taxi>")
     exit()
 
 argumentos = sys.argv
