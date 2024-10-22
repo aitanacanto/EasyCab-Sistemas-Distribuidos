@@ -1,17 +1,17 @@
 import socket
 import sys
 import threading
+from threading import Lock
 import math
 import time
 from kafka import KafkaProducer, KafkaConsumer
-from threading import Lock
-from faker import Faker
 import json
 
 FORMAT = 'utf-8'
 ANCHO = 20
 ALTO = 20
 MAX_CONEXIONES = 22
+CUSTOMERS_ACTIVOS = list((letra, False) for letra in 'abcdefghijklmnopqrstuvwxyz')
 
 if len(sys.argv) != 4:
     print("ERROR: Número de argumentos incorrecto")    
@@ -101,14 +101,34 @@ def recibirPeticionesCustomers():
         for topic_partition, records in message.items():
             for record in records:
                 info = record.value
-                customer_id = info['cliente_id']
+                customer_nombre = info['cliente_nombre']
+                customer_id = asignar_id_cliente()
 
                 if not existeMismaID(customer_id):
                     return [customer_id, info['ubicacion_x'], info['ubicacion_y'], info['destino_x'], info['destino_y']]
+                
+                if customer_id is not None:
+                    return [customer_id, info['ubicacion_x'], info['ubicacion_y'], info['destino_x'], info['destino_y']]
+                else:
+                    print("No hay IDs de clientes disponibles.")
+                    return None
     finally:
         consumer.close()
 
     return None
+
+def asignar_id_cliente():
+    for i, (letra, estado) in enumerate(CUSTOMERS_ACTIVOS):
+        if not estado:
+            CUSTOMERS_ACTIVOS[i] = (letra, True) 
+            return letra
+    return None
+
+def liberar_id_cliente(customer_id):
+    for i, (letra, estado) in enumerate(CUSTOMERS_ACTIVOS):
+        if letra == customer_id:
+            CUSTOMERS_ACTIVOS[i] = (letra, False) 
+
 
 ################## SOCKET TAXI ##################
 
@@ -183,11 +203,13 @@ def mostrarMapa():
         for x in range(ANCHO):
             fila.append(mapa[x][y])
         print(' '.join(fila))
+
 def inicMapa():
     global mapa
     mapa = [[' ' for _ in range(ANCHO)] for _ in range(ALTO)]
     for item in arrayPos:
         mapa[item['x']][item['y']] = str(item['id'])
+
 def existeMismaID(customer_id):
     global mapa
     for y in range(ALTO):
@@ -195,6 +217,7 @@ def existeMismaID(customer_id):
             if mapa[x][y] == customer_id:
                 return True
     return False
+
 def cambiarPosicionTaxiMapa(taxi_id, taxi_posicion):
     global mapa
     for y in range(ALTO):
