@@ -28,7 +28,7 @@ def enviar_solicitud_taxi(cliente_nombre, ubicacion, destino):
     }
     
     producer.send('solicitud_taxi', solicitud)
-    print(f"Solicitud enviada")
+    print(f"Solicitud enviada, en breves su taxi pasara a por usted, ", cliente_nombre,".")
     producer.flush()
     
 # Función para procesar los datos del formulario
