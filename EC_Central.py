@@ -39,32 +39,49 @@ PUERTO_GESTOR = int(argumentos[3])
 ARCHIVO_MAPA = 'mapa.txt'
 ARCHIVO_TAXI = 'taxi.txt'
 
-mapa = [[' ' for _ in range(10)] for _ in range(10)]
-
 SERVER = socket.gethostbyname(socket.gethostname())
 DIRECCION = (SERVER, PUERTO_ESCUCHA)
+
+# Esto es un array de String, en resumen, es el mapa actualizado
+global mapa 
 
 FIN = "FIN"
 OK = "OK"
 
 ############ FUNCIONES #############
 
+def conexionKafka():
+    global mapa
+
+    while True:
+        peticion = recibirPeticionesCustomers()                                                     #[costumer_id, cliente_x, cliente_y, destino_x, destino_y]
+
+        if peticion is not None:
+            taxi = hayTaxisDisponibles(peticion[1], peticion[2])                                        #(taxi_id, taxi_x, taxi_y)
+            if taxi is not None:
+                enviarMensajeTaxiOrden(taxi[0], (peticion[1], peticion[2]), (peticion[3], peticion[4]))
+
+        movimientoTaxi = recibirMensajeTaxi()                                                           #(taxi_id, taxi_posicion, viaje_finalizado)
+
+        if movimientoTaxi is not None:
+            cambiarPosicionTaxiMapa(movimientoTaxi[0], movimientoTaxi[1])
+            actualizarPosicionTaxiFichero(movimientoTaxi[0], movimientoTaxi[1], movimientoTaxi[2])
+            enviarMensajeTaxiMapa(mapa)
+
+###################### KAFKA #######################
 def enviarMensajeTaxiMapa(mapa):                                            # ENVIO A TAXI      Envia mapa actualizado
     producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
     producerTaxi.send('actualizar_mapa', mapa)
     producerTaxi.flush()  
     return
-
 def enviarMensajeTaxiOrden(taxi_id, cliente, destino):                      # ENVIO A TAXI      Envia tanto el cliente a quien tiene que recoger como al destino al que tiene que irs
     producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
-    topic = 'peticion_servicio'
+    topic = 'procesar_viaje'
     message = {'taxi_id': taxi_id, 'posCliente': cliente, 'posDestino': destino}
     producerTaxi.send(topic, message)
     producerTaxi.flush()  
     return
-
-# return (taxi_id, taxi_posicion)
-def recibirMensajeTaxi():                                                   # RECIBIR DE TAXI
+def recibirMensajeTaxi():                                                   # RECIBIR DE TAXI           Devuelve (taxi_id, taxi_posicion, viaje_finalizado)
     # Configuración del consumidor
     consumer = KafkaConsumer(
         'actualizaciones_taxi',                                             # El tópico desde el que se consumen los mensajes
@@ -74,14 +91,41 @@ def recibirMensajeTaxi():                                                   # RE
         group_id='central_group'                                            # Grupo de consumidores
     )
 
-    # Bucle para recibir y procesar mensajes
+    try:
+        # Recibir y procesar solo el primer mensaje, luego cerramos el consumidor
+        for message in consumer:
+            taxi_status = message.value                                     # Obtener el contenido del mensaje
+            taxi_id = taxi_status.get('taxi_id')
+            taxi_posicion = taxi_status.get('taxi_posicion')
+            viaje_finalizado = taxi_status.get('viaje_finalizado')
+
+            # Cerramos el consumidor después de procesar el primer mensaje relevante
+            consumer.close()
+            return (taxi_id, taxi_posicion, viaje_finalizado)
+
+    except Exception as e:
+        print(f"Error al recibir el mensaje del taxi: {e}")
+
+    # En caso de que no se pueda procesar ningún mensaje
+    return None
+def recibirPeticionesCustomers():                                       # RECIBIR DE CUSTOMER       Devuelve [costumer_id, cliente_x, cliente_y, destino_x, destino_y]
+    global mapa
+    consumer = KafkaConsumer(
+        'solicitud_taxi',                                                       # El tópico desde el que va a consumir
+        bootstrap_servers='localhost:9092',                                     # Broker de Kafka
+        value_deserializer=lambda v: json.loads(v.decode('utf-8')),             # Decodifica los mensajes recibidos
+        auto_offset_reset='earliest',                                           # Consume desde el principio si no hay offset
+    )
+
     for message in consumer:
-        taxi_status = message.value                                         # Obtener el contenido del mensaje
-        taxi_id = taxi_status['taxi_id']
-        taxi_posicion = taxi_status['taxi_posicion']
-        # print(f"Actualización recibida para Taxi {taxi_id}: {taxi_posicion}")
-    
-    return (taxi_id, taxi_posicion)
+        info = message.value
+        customer_id = info['cliente_id']
+        
+        if not existeMismaID(customer_id):
+            consumer.close()                                                    # Así no leemos todos los mensajes del topico, solo el primero :)
+            return [customer_id, info['ubicacion_x'], info['ubicacion_y'], info['destino_x'], info['destino_y']]
+
+    return None
 
 ########## SOCKET PARA CONEXIÓN CON TAXIS ##########
 def validarUbicacion(id_taxi, conn):
@@ -126,12 +170,14 @@ def validarUbicacion(id_taxi, conn):
 
     except Exception as e:
         print(f"EXCEPCIÓN ---> No se ha podido comunicar con el taxi: {e}")
+
+    return
 def verificacionTaxi(conn, addr):
     print(f"[NUEVA CONEXION] {conn},{addr} CONECTADO")
 
     try:
         mensaje = conn.recv(4096)
-        id_taxi = mensaje.decode[FORMAT]
+        id_taxi = mensaje.decode(FORMAT)
 
         validarUbicacion(id_taxi, conn)
 
@@ -163,10 +209,44 @@ def conexionTaxi():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind(DIRECCION)
     startTaxi(server)
-####################################################
+ 
+####################### MAPA #######################
+def mostrarMapa():
+    global mapa                                                                  # GESTION MATRIZ
+    for y in range(ALTO):
+        fila = []
+        for x in range(ANCHO): 
+            fila.append(mapa[x][y])
 
+        print(' '.join(fila))
+def inicMapa():
+    global mapa
+    mapa = [[' ' for _ in range(ANCHO)] for _ in range(ALTO)]
+    for item in arrayPos:
+        mapa[item['x']][item['y']] = str(item['id'])
+def existeMismaID(customer_id):
+    global mapa
+    for y in range(ALTO):
+        fila = []
+        for x in range(ANCHO): 
+            if mapa[x][y] == customer_id:
+                return True
+    return False
+def cambiarPosicionTaxiMapa(taxi_id, taxi_posicion):                 # Actualiza la posición del Taxi en el mapa :)
+    global mapa
 
-def actualizarPosicionTaxiFichero(id_taxi, nuevo_x, nuevo_y, finalizado):               # Se actualiza la posición del taxi en la base de datos, se ejecuta cada segundo (finalizado es un bool, dice si se ha acabado el viaje)
+    for y in range(ALTO):
+        for x in range(ANCHO): 
+            if mapa[x][y] == str(taxi_id):
+                mapa[x][y] = '.'
+                break
+    mapa[taxi_posicion[0]][taxi_posicion[1]] = str(taxi_id)
+
+    return 
+
+################## BASE DE DATOS ###################
+def actualizarPosicionTaxiFichero(id_taxi, posicion, finalizado):
+    nuevo_x, nuevo_y = posicion
     with open(ARCHIVO_TAXI, 'r') as archivo:
         lineas = archivo.readlines()
 
@@ -176,88 +256,43 @@ def actualizarPosicionTaxiFichero(id_taxi, nuevo_x, nuevo_y, finalizado):       
     # Recorrer cada línea y buscar el taxi con el ID especificado
     for linea in lineas:
         datos = linea.strip().replace('<', '').split('>')
+        
+        # Comprobamos que tenemos al menos 5 elementos: ['SI', 'SI', 'taxi_id', 'taxi_x', 'taxi_y']
+        if len(datos) >= 5:
+            taxi_asignado = datos[0]
+            taxi_operativo = datos[1]
+            taxi_id = datos[2]
+            taxi_x = datos[3]
+            taxi_y = datos[4]
 
-    if len(datos) >= 3:
-        taxi_id = datos[2]  # El ID del taxi está en la segunda posición
-        taxi_x = datos[3]   # Posición X actual del taxi
-        taxi_y = datos[4]   # Posición Y actual del taxi
+            # Si el ID coincide con el taxi que queremos actualizar
+            if taxi_id == str(id_taxi):
+                # Actualizamos la posición con los nuevos valores
+                taxi_x = str(nuevo_x)
+                taxi_y = str(nuevo_y)
+                taxiActualizado = True
 
-        # Si el ID coincide con el taxi que queremos actualizar
-        if taxi_id == str(id_taxi):
-            # Actualizamos la posición con los nuevos valores
-            taxi_x = nuevo_x
-            taxi_y = nuevo_y
-            taxiActualizado = True
+                # Dependiendo de si el viaje ha finalizado, actualizamos el estado operativo
+                if finalizado:
+                    nueva_linea = f"<SI><NO><{taxi_id}><{taxi_x}><{taxi_y}>\n"
+                else:
+                    nueva_linea = f"<SI><SI><{taxi_id}><{taxi_x}><{taxi_y}>\n"
 
-        # Agregar la línea actualizada (o la misma línea si no es el taxi buscado)
-        if finalizado:
-            nuevasLineas.append(f"<SI><NO><{taxi_id}><{taxi_x}><{taxi_y}>\n")
+                nuevasLineas.append(nueva_linea)
+            else:
+                nuevasLineas.append(linea)
         else:
-            nuevasLineas.append(f"<SI><SI><{taxi_id}><{taxi_x}><{taxi_y}>\n")
+            # En caso de que la línea esté mal formada, la mantenemos tal cual
+            nuevasLineas.append(linea)
 
-    else:
-        nuevasLineas.append(linea)  # Agregar las líneas no válidas también
-
+    # Si el taxi no fue encontrado, mostrar un mensaje de advertencia
     if not taxiActualizado:
         print(f"No se encontró el taxi con ID {id_taxi} para actualizar.")
 
     # Reescribir el archivo con los nuevos datos
     with open(ARCHIVO_TAXI, 'w') as archivo:
         archivo.writelines(nuevasLineas)
-
-def existeMismaID(customer_id, mapa):
-    for y in range(ALTO):
-        fila = []
-        for x in range(ANCHO): 
-            if mapa[x][y] == customer_id:
-                return True
-    return False
-
-# return (posCliente, posDestino)
-def recibirPeticionesCustomers(mapa):                                           # RECIBIR DE CUSTOMER
-
-    consumer = KafkaConsumer(
-        'solicitud_taxi',                                                       # El tópico desde el que va a consumir
-        bootstrap_servers='localhost:9092',                                     # Broker de Kafka
-        value_deserializer=lambda v: json.loads(v.decode('utf-8')),             # Decodifica los mensajes recibidos
-        auto_offset_reset='earliest',                                           # Consume desde el principio si no hay offset
-    )
-
-    for message in consumer:
-        info = message.value
-        customer_id = info['cliente_id']
-        
-        if not existeMismaID(customer_id, mapa):
-            return [customer_id, info['ubicacion_x'], info['ubicacion_y'], info['destino_x'], info['destino_y']]
-
-    return None
-
-def procesar_peticion_customer():                                               # Cola CENTRAL-TAXI informar cliente
-
-    src = recibirPeticionesCustomers()
-    if src:
-        cliente_id = src[0]
-        cliente_x = src[1]
-        cliente_y = src[2]
-        destino_x = src[3]
-        destino_y = src[4]
-
-        taxiAsignado = hayTaxisDisponibles(cliente_x, cliente_y)
-
-        if taxiAsignado:
-            producer_taxi_escogido = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
-            topic = 'procesar_viaje'
-            message = {'taxi_id': taxiAsignado[0],'posCliente': (cliente_x, cliente_y), 'posDestino': (destino_x, destino_y)}
-            producer_taxi_escogido.send(topic, message)
-            producer_taxi_escogido.flush()
-            print("Enviando el taxi más cercano, Taxi: ", taxiAsignado[0])
-        else:
-            print("ERROR: no hay taxis disponibles")
-    else:
-        print("ERROR: ya hay un cliente con el mismo ID en el mapa")
-
-def hayTaxisDisponibles(cliente_x, cliente_y):                                  # Sé pasa por parámetro la posición del cliente para escoger el taxi más cercano
-
+def hayTaxisDisponibles(cliente_x, cliente_y):                                          # Coge el taxi más cercano al cliente DEVUELVE (taxi_id, taxi_x, taxi_y)
     with open(ARCHIVO_TAXI, 'r') as archivo:
         lineas = archivo.readlines()
 
@@ -290,15 +325,6 @@ def hayTaxisDisponibles(cliente_x, cliente_y):                                  
 
     else:
         return None
-
-def mostrarMapa(mapa):                                                                  # GESTION MATRIZ
-    for y in range(ALTO):
-        fila = []
-        for x in range(ANCHO): 
-            fila.append(mapa[x][y])
-
-        print(' '.join(fila))
-
 def meterTaxisBaseDatos(arrayPos):
     arrayTaxis = []
     for item in arrayPos:                                                       # Coge solo los taxis del tablero que nos habian pasado
@@ -308,41 +334,43 @@ def meterTaxisBaseDatos(arrayPos):
     with open(ARCHIVO_TAXI, 'w') as archivo:                                    # Guardamos la informacion en el fichero taxis.txt
         for item in arrayTaxis:
             archivo.write(f"<NO><NO><{item['id']}><{item['x']}><{item['y']}>\n")    # No está asociado a ningún taxi / No está haciendo ningún trayecto
+def leerMapaFichero():
+    arrayPos = []
 
-def inicMapa(mapa):
-    for item in arrayPos:
-        mapa[item['x']][item['y']] = str(item['id'])
+    with open(ARCHIVO_MAPA, 'r') as archivo:                                                # Leer el archivo mapa.txt
+        for linea in archivo:
+            # Usar split() para manejar espacios en blanco
+            datos = linea.strip().replace('<', '').replace('>', '').split()
+            
+            if len(datos) == 3:  # Asegúrate de que haya exactamente 3 elementos
+                id_localizacion = datos[0]  # Puede ser letra o número
+                posicion_x = int(datos[1])-1    # Convertir a entero                        # ¡POSIBLE ERROR inicializar sitios con -1!
+                posicion_y = int(datos[2])-1    # Convertir a entero    
 
-############### MAIN ###############
+                arrayPos.append({
+                    'id': id_localizacion,
+                    'x': posicion_x,
+                    'y': posicion_y
+                })
+            else:
+                print(f"Línea malformada: {linea}")
 
-arrayPos = []
+    return arrayPos
 
-with open(ARCHIVO_MAPA, 'r') as archivo:                                                # Leer el archivo mapa.txt
-    for linea in archivo:
-        # Usar split() para manejar espacios en blanco
-        datos = linea.strip().replace('<', '').replace('>', '').split()
-        
-        if len(datos) == 3:  # Asegúrate de que haya exactamente 3 elementos
-            id_localizacion = datos[0]  # Puede ser letra o número
-            posicion_x = int(datos[1])-1    # Convertir a entero                        # ¡POSIBLE ERROR inicializar sitios con -1!
-            posicion_y = int(datos[2])-1    # Convertir a entero    
+####################### MAIN #######################
 
-            arrayPos.append({
-                'id': id_localizacion,
-                'x': posicion_x,
-                'y': posicion_y
-            })
-        else:
-            print(f"Línea malformada: {linea}")
-
+arrayPos = leerMapaFichero()
 meterTaxisBaseDatos(arrayPos)
-inicMapa(mapa)
+inicMapa()
 
 print("[EMPEZANDO] Servidor inicializando...")
-
 
 # Creamos el hilo para los Taxis y la ejecutamos
 hiloTaxi = threading.Thread(target=conexionTaxi)
 hiloTaxi.start()
 
+hiloKafka = threading.Thread(target=conexionKafka)
+hiloKafka.start()
+
 hiloTaxi.join()
+hiloKafka.join()

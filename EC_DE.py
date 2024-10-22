@@ -26,6 +26,8 @@ argumentos = sys.argv
 
 FIN = "FIN"
 START = "START"
+OK = "OK"
+KO = "KO"
 
 ALTO = 20
 ANCHO = 20
@@ -44,60 +46,71 @@ ID_TAXI = argumentos[7]
 # Esto es la ubicación del taxi en el mapa
 global ubicacion
 
-# Esto es un array, [0] -> posCliente, [1] -> posDestino
+# Esto es un array, [0] -> posClienteX, [1] -> posClienteY
 global cliente
+
+# Esto es un arrat, [0] -> posDestinoX, [1] -> posDestinoY
+global destino
 
 # Booleano, dice si el cliente está ya en el taxi (True) o está yendo hacia él (False)
 global clienteDentro
 
+# Esto es un array de String, en resumen, es el mapa actualizado
+global mapa
+
+# Booleano, dice si el taxi puede moverse (OK) o no (KO)
+global permisoMovimiento
+
 ############ FUNCIONES #############
 
+# Cambia la variable global mapa
 def recibirActualizacionMapa():
+    global mapa
     # Configuración del consumer
     consumer = KafkaConsumer(
         'actualizar_mapa',                              # El tópico desde el que va a consumir
         bootstrap_servers='localhost:9092',             # Broker de Kafka
         value_deserializer=lambda v: json.loads(v.decode('utf-8')),  # Decodifica los mensajes recibidos
-        auto_offset_reset='earliest',                   # Consume desde el principio si no hay offset
-        group_id='taxi_group'                           # Agrupamos consumidores si hay varios taxis
+        auto_offset_reset='latest',                     # Consume desde el principio si no hay offset
     )
 
     # Ciclo para recibir y procesar los mensajes
     for message in consumer:
         mapa = message.value                            # Extraemos el mapa (array de strings)
-        print(f"Mapa recibido de central: {mapa}")
-        # Aquí puedes procesar el mapa como lo necesites dentro del DigitalEngine
-        # Por ejemplo, actualizar el mapa local del taxi
     return
 
 # Cambia la variable global cliente
 def recibirPosicionCliente():
     global cliente
-
-    # Configuración del consumer
+    global destino
+    # Configuración del consumidor
     consumer = KafkaConsumer(
-        'procesar_viaje',                              # El tópico desde el que va a consumir
-        bootstrap_servers='localhost:9092',             # Broker de Kafka
-        value_deserializer=lambda v: json.loads(v.decode('utf-8')),  # Decodifica los mensajes recibidos
-        auto_offset_reset='earliest',                   # Consume desde el principio si no hay offset
+        'procesar_viaje',  # El tópico desde el que va a consumir
+        bootstrap_servers='localhost:9092',  # Broker de Kafka
+        value_deserializer=lambda v: json.loads(v.decode('utf-8')),  # Deserializa los mensajes recibidos
+        auto_offset_reset='earliest',  # Consume desde el principio si no hay offset
+        enable_auto_commit=False,  # Desactivar el autocommit para que no se marquen automáticamente como leídos
+        group_id='taxi_group'  # Grupo de consumidores
     )
 
+    # Bucle para leer mensajes
     for message in consumer:
-        info = message.value                           # Extraemos el mapa (array de strings)
+        info = message.value
         taxi_id = info['taxi_id']
 
+        # Si el mensaje es para el ID_TAXI específico
         if taxi_id == ID_TAXI:
-            cliente[0] = info['posCliente']
-            cliente[1] = info['posDestino']
-            return
-        
-    return 
+            cliente = info['posCliente']
+            destino = info['posDestino']
+            # Realizar el commit solo para el mensaje que se ha procesado
+            consumer.commit()
+    return None
 
 # Enviar actualizaciones del taxi
-def enviarPosicionTaxi(taxi_id, posicion):
+def enviarPosicionTaxi(taxi_id, posicion, finalizado):
     producerTAXI = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
     topic = 'actualizaciones_taxi'
-    message = {'taxi_id': taxi_id, 'taxi_posicion': posicion}
+    message = {'taxi_id': taxi_id, 'taxi_posicion': posicion, 'viaje_finalizado': finalizado}
     producerTAXI.send(topic, message)
     producerTAXI.flush()
 
@@ -114,6 +127,7 @@ def mostrarMapa(mapa):
     return
 
 def conexionSensor():
+    global permisoMovimiento
     socketSensor = socket.socket()
     socketSensor.bind((IP_SENSOR, PUERTO_SENSOR))
     socketSensor.listen(60)
@@ -126,13 +140,11 @@ def conexionSensor():
     while True:
         try:
             mensaje = conexion.recv(4096)
-            if mensaje == FIN:
-                break
+            if mensaje == FIN:   break
+            elif mensaje == OK:  permisoMovimiento = True
+            elif mensaje == KO:  permisoMovimiento = False
 
             print("Mensaje Sensor entrante: [" + mensaje.decode() + "]")
-
-            #mandarMensajeCentral()
-            actualizar_taxi_status(ID_TAXI, )
     
         except Exception as e:
             break
@@ -204,13 +216,12 @@ def validarID():
     socketCentral.send(ID_TAXI.encode())            # Manda a central "START" para que este le mande si la ID solicitada está disponible
     respuesta = socketCentral.recv(4096)
     
-    if respuesta.decode() == FIN:                   # El taxi tiene asignado la ID y puede ejercer
+    if respuesta.decode() == OK:                   # El taxi tiene asignado la ID y puede ejercer
+        print("ID asignado al TAXI")
+    else:
         socketCentral.close()
         exit()
-
-    else:
-        print("ID asignado al TAXI")
-
+    
     return 
 
 def conectarConServidor():
