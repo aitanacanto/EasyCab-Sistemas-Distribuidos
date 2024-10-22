@@ -5,7 +5,6 @@ import math
 import time
 from kafka import KafkaProducer, KafkaConsumer
 from threading import Lock
-from faker import Faker
 import json
 
 FORMAT = 'utf-8'
@@ -28,7 +27,10 @@ ARCHIVO_TAXI = 'taxi.txt'
 SERVER = socket.gethostbyname(socket.gethostname())
 DIRECCION = (SERVER, PUERTO_ESCUCHA)
 lock = Lock()
+
+global mapa
 mapa = [[' ' for _ in range(ANCHO)] for _ in range(ALTO)]
+
 FIN = "FIN"
 OK = "OK"
 
