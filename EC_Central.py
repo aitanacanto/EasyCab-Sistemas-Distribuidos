@@ -27,8 +27,10 @@ ARCHIVO_MAPA = 'mapa.txt'
 ARCHIVO_TAXI = 'taxi.txt'
 SERVER = socket.gethostbyname(socket.gethostname())
 DIRECCION = (SERVER, PUERTO_ESCUCHA)
+
 lock = Lock()
 mapa = [[' ' for _ in range(ANCHO)] for _ in range(ALTO)]
+
 FIN = "FIN"
 OK = "OK"
 
@@ -116,19 +118,16 @@ def recibirPeticionesCustomers():
         consumer.close()
 
     return None
-
 def asignar_id_cliente():
     for i, (letra, estado) in enumerate(CUSTOMERS_ACTIVOS):
         if not estado:
             CUSTOMERS_ACTIVOS[i] = (letra, True) 
             return letra
     return None
-
 def liberar_id_cliente(customer_id):
     for i, (letra, estado) in enumerate(CUSTOMERS_ACTIVOS):
         if letra == customer_id:
             CUSTOMERS_ACTIVOS[i] = (letra, False) 
-
 
 ################## SOCKET TAXI ##################
 
@@ -192,6 +191,7 @@ def startTaxi(server):
 def conexionTaxi():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind(DIRECCION)
+    print(DIRECCION)
     startTaxi(server)
 
 ###################### MAPA ######################
@@ -203,13 +203,11 @@ def mostrarMapa():
         for x in range(ANCHO):
             fila.append(mapa[x][y])
         print(' '.join(fila))
-
 def inicMapa():
     global mapa
     mapa = [[' ' for _ in range(ANCHO)] for _ in range(ALTO)]
     for item in arrayPos:
         mapa[item['x']][item['y']] = str(item['id'])
-
 def existeMismaID(customer_id):
     global mapa
     for y in range(ALTO):
@@ -217,7 +215,6 @@ def existeMismaID(customer_id):
             if mapa[x][y] == customer_id:
                 return True
     return False
-
 def cambiarPosicionTaxiMapa(taxi_id, taxi_posicion):
     global mapa
     for y in range(ALTO):
@@ -334,8 +331,8 @@ print("[EMPEZANDO] Servidor inicializando...")
 hiloTaxi = threading.Thread(target=conexionTaxi)
 hiloTaxi.start()
 
-hiloKafka = threading.Thread(target=conexionKafka)
-hiloKafka.start()
+#hiloKafka = threading.Thread(target=conexionKafka)
+#hiloKafka.start()
 
 hiloTaxi.join()
-hiloKafka.join()
+#hiloKafka.join()

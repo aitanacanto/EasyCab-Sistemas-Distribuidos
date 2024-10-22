@@ -195,7 +195,7 @@ def movimiento(posX, posY, objetivo, movimiento):
     else:
         return (posNueva, posY)
 
-def actualizarPosicion(cliente, destino, mapa):                                
+def actualizarPosicion(cliente, destino, mapa):
     global ubicacion
     global clienteDentro
 
@@ -212,7 +212,7 @@ def actualizarPosicion(cliente, destino, mapa):
     else:
         return movimiento(posX, posY, objetivo, "Horizontal")
 
-def validarID():
+def validarID(socketCentral):
     socketCentral.send(ID_TAXI.encode())            # Manda a central "START" para que este le mande si la ID solicitada está disponible
     respuesta = socketCentral.recv(4096)
     
@@ -225,9 +225,10 @@ def validarID():
     return 
 
 def conectarConServidor():
+    global socketCentral
     socketCentral = socket.socket()
-    socketCentral.connect((IP_CENTRAL, PUERTO_CENTRAL))
     print("CONECTADO AL SERVIDOR CENTRAL EN [" + IP_CENTRAL + " : " + str(PUERTO_CENTRAL) + "]")
+    socketCentral.connect((IP_CENTRAL, PUERTO_CENTRAL))
     validarID(socketCentral)
     return 
 
@@ -239,10 +240,7 @@ conectarConServidor()  # Servidor conectado con el DigitalEngine
 hiloSensor = threading.Thread(target=conexionSensor)
 hiloSensor.start()
 
-# Hilo para el consumidor de Kafka
 
-
-# Esperar que el hilo del sensor termine (puedes cambiar esto según tu lógica)
 hiloSensor.join()
 # Puedes unirte al hilo del consumidor de Kafka si lo deseas
 # hiloKafka.join()  # Descomenta si quieres esperar que el consumidor termine
