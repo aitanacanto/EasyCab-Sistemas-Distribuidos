@@ -12,9 +12,9 @@ producer = KafkaProducer(bootstrap_servers=['localhost:9092'],
                          value_serializer=json_serializer)
 
 # Función para enviar la solicitud de taxi
-def enviar_solicitud_taxi(cliente_id, ubicacion_x, ubicacion_y, destino_x, destino_y):
+def enviar_solicitud_taxi(cliente_nombre, ubicacion_x, ubicacion_y, destino_x, destino_y):
     solicitud = {
-        "cliente_id": cliente_id,
+        "cliente_nombre": cliente_nombre,
         "ubicacion_x": ubicacion_x,
         "ubicacion_y": ubicacion_y,
         "destino_x": destino_x,
@@ -27,7 +27,7 @@ def enviar_solicitud_taxi(cliente_id, ubicacion_x, ubicacion_y, destino_x, desti
     
 # Función para procesar los datos del formulario
 def procesar_formulario():
-    cliente_id = entrada_cliente_id.get()
+    cliente_nombre = etiqueta_cliente_nombre.get()
     ubicacion_x = entrada_ubicacion_x.get()
     ubicacion_y = entrada_ubicacion_y.get()
     destino_x = entrada_destino_x.get()
@@ -38,12 +38,12 @@ def procesar_formulario():
     destino = (int(destino_x), int(destino_y))
     
     # Validar que los campos no estén vacíos
-    if not cliente_id or not ubicacion_x or not ubicacion_y or not destino_x or not destino_y:
+    if not cliente_nombre or not ubicacion_x or not ubicacion_y or not destino_x or not destino_y:
         messagebox.showerror("Error", "Por favor, complete todos los campos.")
         return
     
     # Llamar a la función enviar_solicitud_taxi con los datos
-    enviar_solicitud_taxi(cliente_id, ubicacion, destino)
+    enviar_solicitud_taxi(cliente_nombre, ubicacion, destino)
     
     # Mostrar mensaje de éxito
     messagebox.showinfo("Éxito", "Solicitud de taxi enviada con éxito!")
@@ -53,10 +53,10 @@ ventana = tk.Tk()
 ventana.title("Formulario de Solicitud de Taxi")
 
 # Etiquetas y campos de entrada para el cliente ID
-etiqueta_cliente_id = tk.Label(ventana, text="ID del Cliente:")
-etiqueta_cliente_id.grid(row=0, column=0)
-entrada_cliente_id = tk.Entry(ventana)
-entrada_cliente_id.grid(row=0, column=1)
+etiqueta_cliente_nombre = tk.Label(ventana, text="Nombre del Cliente:")
+etiqueta_cliente_nombre.grid(row=0, column=0)
+etiqueta_cliente_nombre = tk.Entry(ventana)
+etiqueta_cliente_nombre.grid(row=0, column=1)
 
 # Etiquetas y campos de entrada para la ubicación (x, y)
 etiqueta_ubicacion = tk.Label(ventana, text="Ubicación (x, y):")
