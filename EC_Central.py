@@ -191,7 +191,7 @@ def startTaxi(server):
 def conexionTaxi():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind(DIRECCION)
-    print(DIRECCION)
+    print("Escuchando taxis en la direccion: " + DIRECCION)
     startTaxi(server)
 
 ###################### MAPA ######################
