@@ -225,7 +225,6 @@ def validarID():
     return 
 
 def conectarConServidor():
-    global socketCentral
     socketCentral = socket.socket()
     socketCentral.connect((IP_CENTRAL, PUERTO_CENTRAL))
     print("CONECTADO AL SERVIDOR CENTRAL EN [" + IP_CENTRAL + " : " + str(PUERTO_CENTRAL) + "]")
