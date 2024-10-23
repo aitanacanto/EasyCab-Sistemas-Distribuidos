@@ -24,7 +24,7 @@ if len(sys.argv) != 8:
 
 argumentos = sys.argv
 
-FIN = "FIN"
+FIN = "<FIN>"
 START = "START"
 OK = "OK"
 KO = "KO"
@@ -213,14 +213,19 @@ def actualizarPosicion(cliente, destino, mapa):
         return movimiento(posX, posY, objetivo, "Horizontal")
 
 def validarID(socketCentral):
+    global ubicacion
     socketCentral.send(ID_TAXI.encode())            # Manda a central "START" para que este le mande si la ID solicitada está disponible
     respuesta = socketCentral.recv(4096)
     
-    if respuesta.decode() == OK:                   # El taxi tiene asignado la ID y puede ejercer
-        print("ID asignado al TAXI")
-    else:
+    datos = respuesta.decode().strip().replace('<', '').split('>')
+
+    if respuesta.decode() == FIN:                   # El taxi tiene asignado la ID y puede ejercer
+        print("ERROR: ID del taxi se está utilizando")
         socketCentral.close()
         exit()
+    else:
+        ubicacion = (datos[1], datos[2])
+        print("ID asignado con éxito")
     
     return 
 

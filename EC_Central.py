@@ -31,7 +31,7 @@ DIRECCION = (SERVER, PUERTO_ESCUCHA)
 lock = Lock()
 mapa = [[' ' for _ in range(ANCHO)] for _ in range(ALTO)]
 
-FIN = "FIN"
+FIN = "<FIN>"
 OK = "OK"
 
 #################### KAFKA #####################
@@ -148,12 +148,15 @@ def validarUbicacion(id_taxi, conn):
                 taxi_id = datos[2]
 
                 if taxi_id == id_taxi:
-                    taxiEncontrado = True
                     if taxi_asignado == "NO" and taxi_operativo == "NO":
+                        taxiEncontrado = True
                         nueva_linea = f"<SI><NO><{taxi_id}><{datos[3]}><{datos[4]}>\n"
                         nuevasLineas.append(nueva_linea)
-                        conn.send(OK.encode(FORMAT))
+                        mensaje = "<" + OK + "><"+ datos[3] +"><" + datos[4] + ">"
+                        print("Confirmado el ID del taxi: " + mensaje)
+                        conn.send(mensaje.encode(FORMAT))
                     else:
+                        taxiEncontrado = False
                         nuevasLineas.append(linea)
                 else:
                     nuevasLineas.append(linea)
@@ -191,7 +194,7 @@ def startTaxi(server):
 def conexionTaxi():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind(DIRECCION)
-    print("Escuchando taxis en la direccion: " + DIRECCION)
+    print(DIRECCION)
     startTaxi(server)
 
 ###################### MAPA ######################
