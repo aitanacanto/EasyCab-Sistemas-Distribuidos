@@ -1,16 +1,17 @@
 import socket
 import sys
 import threading
+from threading import Lock
 import math
 import time
 from kafka import KafkaProducer, KafkaConsumer
-from threading import Lock
 import json
 
 FORMAT = 'utf-8'
 ANCHO = 20
 ALTO = 20
 MAX_CONEXIONES = 22
+CUSTOMERS_ACTIVOS = list((letra, False) for letra in 'abcdefghijklmnopqrstuvwxyz')
 
 if len(sys.argv) != 4:
     print("ERROR: Número de argumentos incorrecto")    
@@ -26,12 +27,13 @@ ARCHIVO_MAPA = 'mapa.txt'
 ARCHIVO_TAXI = 'taxi.txt'
 SERVER = socket.gethostbyname(socket.gethostname())
 DIRECCION = (SERVER, PUERTO_ESCUCHA)
+
 lock = Lock()
 
 global mapa
 mapa = [[' ' for _ in range(ANCHO)] for _ in range(ALTO)]
 
-FIN = "FIN"
+FIN = "<FIN>"
 OK = "OK"
 
 #################### KAFKA #####################
@@ -103,14 +105,31 @@ def recibirPeticionesCustomers():
         for topic_partition, records in message.items():
             for record in records:
                 info = record.value
-                customer_id = info['cliente_id']
+                customer_nombre = info['cliente_nombre']
+                customer_id = asignar_id_cliente()
 
                 if not existeMismaID(customer_id):
                     return [customer_id, info['ubicacion_x'], info['ubicacion_y'], info['destino_x'], info['destino_y']]
+                
+                if customer_id is not None:
+                    return [customer_id, info['ubicacion_x'], info['ubicacion_y'], info['destino_x'], info['destino_y']]
+                else:
+                    print("No hay IDs de clientes disponibles.")
+                    return None
     finally:
         consumer.close()
 
     return None
+def asignar_id_cliente():
+    for i, (letra, estado) in enumerate(CUSTOMERS_ACTIVOS):
+        if not estado:
+            CUSTOMERS_ACTIVOS[i] = (letra, True) 
+            return letra
+    return None
+def liberar_id_cliente(customer_id):
+    for i, (letra, estado) in enumerate(CUSTOMERS_ACTIVOS):
+        if letra == customer_id:
+            CUSTOMERS_ACTIVOS[i] = (letra, False) 
 
 ################## SOCKET TAXI ##################
 
@@ -131,12 +150,15 @@ def validarUbicacion(id_taxi, conn):
                 taxi_id = datos[2]
 
                 if taxi_id == id_taxi:
-                    taxiEncontrado = True
                     if taxi_asignado == "NO" and taxi_operativo == "NO":
+                        taxiEncontrado = True
                         nueva_linea = f"<SI><NO><{taxi_id}><{datos[3]}><{datos[4]}>\n"
                         nuevasLineas.append(nueva_linea)
-                        conn.send(OK.encode(FORMAT))
+                        mensaje = "<" + OK + "><"+ datos[3] +"><" + datos[4] + ">"
+                        print("Confirmado el ID del taxi: " + mensaje)
+                        conn.send(mensaje.encode(FORMAT))
                     else:
+                        taxiEncontrado = False
                         nuevasLineas.append(linea)
                 else:
                     nuevasLineas.append(linea)
@@ -174,6 +196,7 @@ def startTaxi(server):
 def conexionTaxi():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind(DIRECCION)
+    print(DIRECCION)
     startTaxi(server)
 
 ###################### MAPA ######################
@@ -313,8 +336,8 @@ print("[EMPEZANDO] Servidor inicializando...")
 hiloTaxi = threading.Thread(target=conexionTaxi)
 hiloTaxi.start()
 
-hiloKafka = threading.Thread(target=conexionKafka)
-hiloKafka.start()
+#hiloKafka = threading.Thread(target=conexionKafka)
+#hiloKafka.start()
 
 hiloTaxi.join()
-hiloKafka.join()
+#hiloKafka.join()

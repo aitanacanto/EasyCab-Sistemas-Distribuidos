@@ -19,12 +19,12 @@ import json
 
 if len(sys.argv) != 8:
     print("ERROR: Número de argumentos arróneos")    
-    print("Formato correcto -> python3 EC_DE <IP central> <Puerto central> <IP gestor> <Puerto central> <IP Sensor> <Puerto Sensor> <ID Taxi>")
+    print("Formato correcto -> python3 EC_DE <IP central> <Puerto central> <IP gestor> <Puerto gestor> <IP Sensor> <Puerto Sensor> <ID Taxi>")
     exit()
 
 argumentos = sys.argv
 
-FIN = "FIN"
+FIN = "<FIN>"
 START = "START"
 OK = "OK"
 KO = "KO"
@@ -195,7 +195,7 @@ def movimiento(posX, posY, objetivo, movimiento):
     else:
         return (posNueva, posY)
 
-def actualizarPosicion(cliente, destino, mapa):                                
+def actualizarPosicion(cliente, destino, mapa):
     global ubicacion
     global clienteDentro
 
@@ -212,23 +212,28 @@ def actualizarPosicion(cliente, destino, mapa):
     else:
         return movimiento(posX, posY, objetivo, "Horizontal")
 
-def validarID():
+def validarID(socketCentral):
+    global ubicacion
     socketCentral.send(ID_TAXI.encode())            # Manda a central "START" para que este le mande si la ID solicitada está disponible
     respuesta = socketCentral.recv(4096)
     
-    if respuesta.decode() == OK:                   # El taxi tiene asignado la ID y puede ejercer
-        print("ID asignado al TAXI")
-    else:
+    datos = respuesta.decode().strip().replace('<', '').split('>')
+
+    if respuesta.decode() == FIN:                   # El taxi tiene asignado la ID y puede ejercer
+        print("ERROR: ID del taxi se está utilizando")
         socketCentral.close()
         exit()
+    else:
+        ubicacion = (datos[1], datos[2])
+        print("ID asignado con éxito")
     
     return 
 
 def conectarConServidor():
     global socketCentral
     socketCentral = socket.socket()
-    socketCentral.connect((IP_CENTRAL, PUERTO_CENTRAL))
     print("CONECTADO AL SERVIDOR CENTRAL EN [" + IP_CENTRAL + " : " + str(PUERTO_CENTRAL) + "]")
+    socketCentral.connect((IP_CENTRAL, PUERTO_CENTRAL))
     validarID(socketCentral)
     return 
 
@@ -240,10 +245,7 @@ conectarConServidor()  # Servidor conectado con el DigitalEngine
 hiloSensor = threading.Thread(target=conexionSensor)
 hiloSensor.start()
 
-# Hilo para el consumidor de Kafka
 
-
-# Esperar que el hilo del sensor termine (puedes cambiar esto según tu lógica)
 hiloSensor.join()
 # Puedes unirte al hilo del consumidor de Kafka si lo deseas
 # hiloKafka.join()  # Descomenta si quieres esperar que el consumidor termine
