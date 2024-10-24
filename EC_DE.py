@@ -42,12 +42,11 @@ mapa_lock = threading.Lock()
 ############ FUNCIONES #############
 
 def mostrarMapa(mapa):
-    with mapa_lock:
-        for y in range(ALTO):
-            fila = []
-            for x in range(ANCHO):
-                fila.append(mapa[x][y])
-            print(' '.join(fila))
+    for y in range(ALTO):
+        fila = []
+        for x in range(ANCHO):
+            fila.append(mapa[x][y])
+        print('.'.join(fila))
 
 def realizarViaje():
     global permisoMovimiento
@@ -80,12 +79,12 @@ def cerebroDigitalEngine():
     global clienteDentro
 
     while True:
-        if recibirPosicionCliente() and recibirActualizacionMapa():
+        if recibirActualizacionMapa() and recibirPosicionCliente():
             print("Orden de viaje recibido, recogiendo al cliente...")
             clienteDentro = False
             realizarViaje()
 
-        time.sleep(1)
+        time.sleep(2)
 
 def recibirActualizacionMapa():
     global mapa
@@ -103,6 +102,7 @@ def recibirActualizacionMapa():
         return True
 
     return False
+
 
 def recibirPosicionCliente():
     global cliente
@@ -133,6 +133,7 @@ def recibirPosicionCliente():
                     consumer.commit({
                         topic_partition: OffsetAndMetadata(message.offset + 1, None)
                     })
+                    print("RECIBIDO ORDEN DE VIAJE")
                     return True
     except Exception as e:
         print(f"Error al recibir la orden del servicio: {e}")
@@ -146,6 +147,13 @@ def enviarPosicionTaxi(taxi_id, posicion, finalizado):
     message = {'taxi_id': taxi_id, 'taxi_posicion': posicion, 'viaje_finalizado': finalizado}
     producerTAXI.send(topic, message)
     producerTAXI.flush()
+
+def mostrarMapa(mapa):
+    for y in range(ALTO):
+        fila = []
+        for x in range(ANCHO): 
+            fila.append(mapa[x][y])
+        print(' '.join(fila))
 
 def conexionSensor():
     global permisoMovimiento

@@ -13,7 +13,7 @@ if len(sys.argv) != 3:
 
 argumentos = sys.argv
 
-FIN = "FIN"
+FIN = "<FIN>"
 OK = "OK"
 KO = "KO"
 

@@ -54,9 +54,9 @@ def conexionKafka():
             taxi = hayTaxisDisponibles(peticion[1], peticion[2])
             
             if taxi is not None:
-                print("Taxi asociado al viaje")
-                enviarMensajeTaxiOrden(taxi[0], (peticion[1], peticion[2]), (peticion[3], peticion[4]))
+                mostrarMapa()
                 enviarMensajeTaxiMapa()
+                enviarMensajeTaxiOrden(taxi[0], (peticion[1], peticion[2]), (peticion[3], peticion[4]))
 
         movimientoTaxi = recibirMensajeTaxi()
 
@@ -72,6 +72,9 @@ def enviarMensajeTaxiMapa():
     producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
     producerTaxi.send('actualizar_mapa', value=mapa)
     producerTaxi.flush()
+    print("Mapa enviado exitosamente")
+    
+
 def enviarMensajeTaxiOrden(taxi_id, cliente, destino):
     producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
     topic = 'procesar_viaje'
