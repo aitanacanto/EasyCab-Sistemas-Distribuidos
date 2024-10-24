@@ -4,7 +4,7 @@ import threading
 from threading import Lock
 import math
 import time
-from kafka import KafkaProducer, KafkaConsumer
+from kafka import KafkaProducer, KafkaConsumer, OffsetAndMetadata
 import json
 
 FORMAT = 'utf-8'
@@ -41,7 +41,6 @@ OK = "OK"
 def conexionKafka():
     while True:
         peticion = recibirPeticionesCustomers()
-
         if peticion is not None:
             print("RECIBIDO solicitud de viaje")
             taxi = hayTaxisDisponibles(peticion[1], peticion[2])
@@ -103,32 +102,44 @@ def recibirPeticionesCustomers():
         'solicitud_taxi',
         bootstrap_servers='localhost:9092',
         value_deserializer=lambda v: json.loads(v.decode('utf-8')),
-        auto_offset_reset='earliest',
+        auto_offset_reset='earliest',  # Empieza desde el principio si no hay offset
+        group_id='central_group',  # Asegúrate de que todos los consumidores de este grupo tengan el mismo id
+        enable_auto_commit=False  # Desactivar el autocommit
     )
 
     try:
-        message = consumer.poll(timeout_ms=1000)
-        if not message:
-            return None
+        while True:
+            # Poll para obtener mensajes en una ventana de tiempo específica
+            messages = consumer.poll(timeout_ms=1000)
+            if not messages:
+                return None
 
-        for topic_partition, records in message.items():
-            for record in records:
-                info = record.value
-                customer_nombre = info['cliente_nombre']
-                customer_id = asignar_id_cliente()
+            # Procesar los mensajes recibidos
+            for topic_partition, records in messages.items():
+                for record in records:
+                    info = record.value
+                    customer_nombre = info['cliente_nombre']
+                    customer_id = asignar_id_cliente()
 
-                if not existeMismaID(customer_id):
-                    return [customer_id, info['ubicacion_x'], info['ubicacion_y'], info['destino_x'], info['destino_y']]
-                
-                if customer_id is not None:
-                    return [customer_id, info['ubicacion_x'], info['ubicacion_y'], info['destino_x'], info['destino_y']]
-                else:
-                    print("No hay IDs de clientes disponibles.")
-                    return None
+                    if not existeMismaID(customer_id):
+                        consumer.commit({topic_partition: OffsetAndMetadata(record.offset + 1, None)})
+                        return [customer_id, info['ubicacion_x'], info['ubicacion_y'], info['destino_x'], info['destino_y']]
+
+                    if customer_id is not None:
+                        consumer.commit({topic_partition: OffsetAndMetadata(record.offset + 1, None)})
+                        return [customer_id, info['ubicacion_x'], info['ubicacion_y'], info['destino_x'], info['destino_y']]
+                    else:
+                        print("No hay IDs de clientes disponibles.")
+                        return None
+
+    except Exception as e:
+        print(f"Error al recibir peticiones: {e}")
+
     finally:
         consumer.close()
 
     return None
+
 def asignar_id_cliente():
     for i, (letra, estado) in enumerate(CUSTOMERS_ACTIVOS):
         if not estado:
