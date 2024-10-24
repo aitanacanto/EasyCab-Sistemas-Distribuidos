@@ -27,9 +27,13 @@ ARCHIVO_MAPA = 'mapa.txt'
 ARCHIVO_TAXI = 'taxi.txt'
 SERVER = socket.gethostbyname(socket.gethostname())
 DIRECCION = (SERVER, PUERTO_ESCUCHA)
+
 lock = Lock()
+
+global mapa
 mapa = [[' ' for _ in range(ANCHO)] for _ in range(ALTO)]
-FIN = "FIN"
+
+FIN = "<FIN>"
 OK = "OK"
 
 #################### KAFKA #####################
@@ -37,18 +41,24 @@ OK = "OK"
 def conexionKafka():
     while True:
         peticion = recibirPeticionesCustomers()
+
         if peticion is not None:
             taxi = hayTaxisDisponibles(peticion[1], peticion[2])
             if taxi is not None:
                 enviarMensajeTaxiOrden(taxi[0], (peticion[1], peticion[2]), (peticion[3], peticion[4]))
+                enviarMensajeTaxiMapa()
 
         movimientoTaxi = recibirMensajeTaxi()
+
         if movimientoTaxi is not None:
             with lock:
+                mostrarMapa()
                 cambiarPosicionTaxiMapa(movimientoTaxi[0], movimientoTaxi[1])
                 actualizarPosicionTaxiFichero(movimientoTaxi[0], movimientoTaxi[1], movimientoTaxi[2])
-                enviarMensajeTaxiMapa(mapa)
-def enviarMensajeTaxiMapa(mapa):
+                enviarMensajeTaxiMapa()
+
+def enviarMensajeTaxiMapa():
+    global mapa
     producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
     producerTaxi.send('actualizar_mapa', value=mapa)
     producerTaxi.flush()
@@ -79,6 +89,7 @@ def recibirMensajeTaxi():
                 taxi_posicion = taxi_status.get('taxi_posicion')
                 viaje_finalizado = taxi_status.get('viaje_finalizado')
                 return (taxi_id, taxi_posicion, viaje_finalizado)
+            
     except Exception as e:
         print(f"Error al recibir el mensaje del taxi: {e}")
     finally:
@@ -116,19 +127,16 @@ def recibirPeticionesCustomers():
         consumer.close()
 
     return None
-
 def asignar_id_cliente():
     for i, (letra, estado) in enumerate(CUSTOMERS_ACTIVOS):
         if not estado:
             CUSTOMERS_ACTIVOS[i] = (letra, True) 
             return letra
     return None
-
 def liberar_id_cliente(customer_id):
     for i, (letra, estado) in enumerate(CUSTOMERS_ACTIVOS):
         if letra == customer_id:
             CUSTOMERS_ACTIVOS[i] = (letra, False) 
-
 
 ################## SOCKET TAXI ##################
 
@@ -149,12 +157,15 @@ def validarUbicacion(id_taxi, conn):
                 taxi_id = datos[2]
 
                 if taxi_id == id_taxi:
-                    taxiEncontrado = True
                     if taxi_asignado == "NO" and taxi_operativo == "NO":
+                        taxiEncontrado = True
                         nueva_linea = f"<SI><NO><{taxi_id}><{datos[3]}><{datos[4]}>\n"
                         nuevasLineas.append(nueva_linea)
-                        conn.send(OK.encode(FORMAT))
+                        mensaje = "<" + OK + "><"+ datos[3] +"><" + datos[4] + ">"
+                        print("Confirmado el ID del taxi: " + mensaje)
+                        conn.send(mensaje.encode(FORMAT))
                     else:
+                        taxiEncontrado = False
                         nuevasLineas.append(linea)
                 else:
                     nuevasLineas.append(linea)
@@ -192,6 +203,7 @@ def startTaxi(server):
 def conexionTaxi():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind(DIRECCION)
+    print(DIRECCION)
     startTaxi(server)
 
 ###################### MAPA ######################
@@ -203,13 +215,11 @@ def mostrarMapa():
         for x in range(ANCHO):
             fila.append(mapa[x][y])
         print(' '.join(fila))
-
 def inicMapa():
     global mapa
     mapa = [[' ' for _ in range(ANCHO)] for _ in range(ALTO)]
     for item in arrayPos:
         mapa[item['x']][item['y']] = str(item['id'])
-
 def existeMismaID(customer_id):
     global mapa
     for y in range(ALTO):
@@ -217,7 +227,6 @@ def existeMismaID(customer_id):
             if mapa[x][y] == customer_id:
                 return True
     return False
-
 def cambiarPosicionTaxiMapa(taxi_id, taxi_posicion):
     global mapa
     for y in range(ALTO):
@@ -334,8 +343,8 @@ print("[EMPEZANDO] Servidor inicializando...")
 hiloTaxi = threading.Thread(target=conexionTaxi)
 hiloTaxi.start()
 
-hiloKafka = threading.Thread(target=conexionKafka)
-hiloKafka.start()
+#hiloKafka = threading.Thread(target=conexionKafka)
+#hiloKafka.start()
 
 hiloTaxi.join()
-hiloKafka.join()
+#hiloKafka.join()
