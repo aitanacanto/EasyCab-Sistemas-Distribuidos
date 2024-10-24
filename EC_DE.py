@@ -39,6 +39,14 @@ permisoMovimiento = False
 
 ############ FUNCIONES #############
 
+def mostrarMapa():
+    global mapa
+    for y in range(ALTO):
+        fila = []
+        for x in range(ANCHO):
+            fila.append(mapa[x][y])
+        print(' '.join(fila))
+
 def realizarViaje():
     global permisoMovimiento
     global clienteDentro
@@ -47,6 +55,7 @@ def realizarViaje():
 
     while True:
         if permisoMovimiento:
+            mostrarMapa()
             if not clienteDentro:
                 ubicacion = actualizarPosicion(ubicacion, cliente, mapa)
                 enviarPosicionTaxi(ID_TAXI, ubicacion, False)
