@@ -43,8 +43,10 @@ def conexionKafka():
         peticion = recibirPeticionesCustomers()
 
         if peticion is not None:
+            print("RECIBIDO solicitud de viaje")
             taxi = hayTaxisDisponibles(peticion[1], peticion[2])
             if taxi is not None:
+                print("Taxi asociado al viaje")
                 enviarMensajeTaxiOrden(taxi[0], (peticion[1], peticion[2]), (peticion[3], peticion[4]))
                 enviarMensajeTaxiMapa()
 
