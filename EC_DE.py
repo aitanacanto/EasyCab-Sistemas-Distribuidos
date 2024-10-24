@@ -69,6 +69,7 @@ def cerebroDigitalEngine():
 
     while True:
         if recibirPosicionCliente() and recibirActualizacionMapa():
+            print("Orden de viaje recibido, recogiendo al cliente...")
             clienteDentro = False
             realizarViaje()
 
