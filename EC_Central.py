@@ -41,10 +41,15 @@ OK = "OK"
 
 #################### KAFKA #####################
 
+def meterEnMapa(pos_x, pos_y, elemento):
+    mapa[pos_x][pos_y] = elemento
+
 def conexionKafka():
     while True:
         peticion = recibirPeticionesCustomers()
         if peticion is not None:
+            meterEnMapa(peticion[1], peticion[2], peticion[0])
+            meterEnMapa(peticion[3], peticion[4], peticion[0].upper())
             print("RECIBIDO solicitud de viaje")
             taxi = hayTaxisDisponibles(peticion[1], peticion[2])
             if taxi is not None:
@@ -230,7 +235,7 @@ def mostrarMapa():
         fila = []
         for x in range(ANCHO):
             fila.append(mapa[x][y])
-        print(' '.join(fila))
+        print('.'.join(fila))
 def inicMapa():
     global mapa
     mapa = [[' ' for _ in range(ANCHO)] for _ in range(ALTO)]
