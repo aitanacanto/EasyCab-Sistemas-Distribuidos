@@ -7,6 +7,9 @@ import time
 from kafka import KafkaProducer, KafkaConsumer, OffsetAndMetadata
 import json
 
+############ COSAS A MEJORARA ############
+# Vaciar la mensajería de las solicitudes del customer a la central
+
 FORMAT = 'utf-8'
 ANCHO = 20
 ALTO = 20
@@ -172,7 +175,7 @@ def validarUbicacion(id_taxi, conn):
                 if taxi_id == id_taxi:
                     if taxi_asignado == "NO" and taxi_operativo == "NO":
                         taxiEncontrado = True
-                        nueva_linea = f"<SI><NO><{taxi_id}><{datos[3]}><{datos[4]}>\n"
+                        nueva_linea = f"<SI><SI><{taxi_id}><{datos[3]}><{datos[4]}>\n"
                         nuevasLineas.append(nueva_linea)
                         mensaje = "<" + OK + "><"+ datos[3] +"><" + datos[4] + ">"
                         print("Confirmado el ID del taxi: " + mensaje)
@@ -356,8 +359,8 @@ print("[EMPEZANDO] Servidor inicializando...")
 hiloTaxi = threading.Thread(target=conexionTaxi)
 hiloTaxi.start()
 
-#hiloKafka = threading.Thread(target=conexionKafka)
-#hiloKafka.start()
+hiloKafka = threading.Thread(target=conexionKafka)
+hiloKafka.start()
 
 hiloTaxi.join()
-#hiloKafka.join()
+hiloKafka.join()

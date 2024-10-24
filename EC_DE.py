@@ -243,8 +243,8 @@ conectarConServidor()  # Validar ID
 hiloSensor = threading.Thread(target=conexionSensor)
 hiloSensor.start()
 
-#hiloKafka = threading.Thread(target=cerebroDigitalEngine)
-#hiloKafka.start()
+hiloKafka = threading.Thread(target=cerebroDigitalEngine)
+hiloKafka.start()
 
 hiloSensor.join()
-#hiloKafka.join()
+hiloKafka.join()
