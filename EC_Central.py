@@ -41,18 +41,24 @@ OK = "OK"
 def conexionKafka():
     while True:
         peticion = recibirPeticionesCustomers()
+
         if peticion is not None:
             taxi = hayTaxisDisponibles(peticion[1], peticion[2])
             if taxi is not None:
                 enviarMensajeTaxiOrden(taxi[0], (peticion[1], peticion[2]), (peticion[3], peticion[4]))
+                enviarMensajeTaxiMapa()
 
         movimientoTaxi = recibirMensajeTaxi()
+
         if movimientoTaxi is not None:
             with lock:
+                mostrarMapa()
                 cambiarPosicionTaxiMapa(movimientoTaxi[0], movimientoTaxi[1])
                 actualizarPosicionTaxiFichero(movimientoTaxi[0], movimientoTaxi[1], movimientoTaxi[2])
-                enviarMensajeTaxiMapa(mapa)
-def enviarMensajeTaxiMapa(mapa):
+                enviarMensajeTaxiMapa()
+
+def enviarMensajeTaxiMapa():
+    global mapa
     producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
     producerTaxi.send('actualizar_mapa', value=mapa)
     producerTaxi.flush()
@@ -83,6 +89,7 @@ def recibirMensajeTaxi():
                 taxi_posicion = taxi_status.get('taxi_posicion')
                 viaje_finalizado = taxi_status.get('viaje_finalizado')
                 return (taxi_id, taxi_posicion, viaje_finalizado)
+            
     except Exception as e:
         print(f"Error al recibir el mensaje del taxi: {e}")
     finally:

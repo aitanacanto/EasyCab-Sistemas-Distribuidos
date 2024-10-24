@@ -3,27 +3,16 @@ import sys
 import threading
 import time
 from kafka import KafkaConsumer, KafkaProducer
+from kafka.structs import OffsetAndMetadata
 import json
 
-################ LO QUE FALTA ##############
-
-# Falta hacer el movimiento del taxi hasta el cliente y luego hasta el destino
-
-####### PREGUNTAS #######
-
-# Entradas: IP y Puerto de Central
-#           IP y Puerto del gestor de colas
-#           Ip y Puerto del Sensor
-#           Id del taxi
-
-
 if len(sys.argv) != 8:
-    print("ERROR: Número de argumentos arróneos")    
+    print("ERROR: Número de argumentos incorrecto")    
     print("Formato correcto -> python3 EC_DE <IP central> <Puerto central> <IP gestor> <Puerto gestor> <IP Sensor> <Puerto Sensor> <ID Taxi>")
-    exit()
+    sys.exit(1)
 
+# Variables iniciales del programa
 argumentos = sys.argv
-
 FIN = "<FIN>"
 START = "START"
 OK = "OK"
@@ -34,79 +23,108 @@ ANCHO = 20
 
 IP_CENTRAL = argumentos[1]
 PUERTO_CENTRAL = int(argumentos[2])
-
 IP_GESTOR = argumentos[3]
 PUERTO_GESTOR = int(argumentos[4])
-
 IP_SENSOR = argumentos[5]
 PUERTO_SENSOR = int(argumentos[6])
-
 ID_TAXI = argumentos[7]
 
-# Esto es la ubicación del taxi en el mapa
-global ubicacion
-
-# Esto es un array, [0] -> posClienteX, [1] -> posClienteY
-global cliente
-
-# Esto es un arrat, [0] -> posDestinoX, [1] -> posDestinoY
-global destino
-
-# Booleano, dice si el cliente está ya en el taxi (True) o está yendo hacia él (False)
-global clienteDentro
-
-# Esto es un array de String, en resumen, es el mapa actualizado
-global mapa
-
-# Booleano, dice si el taxi puede moverse (OK) o no (KO)
-global permisoMovimiento
+# Variables compartidas
+ubicacion = None
+cliente = None
+destino = None
+clienteDentro = False
+mapa = None
+permisoMovimiento = False
 
 ############ FUNCIONES #############
 
-# Cambia la variable global mapa
+def realizarViaje():
+    global permisoMovimiento
+    global clienteDentro
+    global ubicacion
+    global destino
+
+    while True:
+        if permisoMovimiento:
+            if not clienteDentro:
+                ubicacion = actualizarPosicion(ubicacion, cliente, mapa)
+                enviarPosicionTaxi(ID_TAXI, ubicacion, False)
+
+                if ubicacion[0] == cliente[0] and ubicacion[1] == cliente[1]:
+                    clienteDentro = True
+            else:
+                ubicacion = actualizarPosicion(ubicacion, destino, mapa)
+
+                if ubicacion[0] == destino[0] and ubicacion[1] == destino[1]:
+                    enviarPosicionTaxi(ID_TAXI, ubicacion, True)
+                    break
+                else:
+                    enviarPosicionTaxi(ID_TAXI, ubicacion, False)
+
+        time.sleep(2)
+
+def cerebroDigitalEngine():
+    global clienteDentro
+
+    while True:
+        if recibirPosicionCliente() and recibirActualizacionMapa():
+            clienteDentro = False
+            realizarViaje()
+
+        time.sleep(1)
+
 def recibirActualizacionMapa():
     global mapa
-    # Configuración del consumer
+
     consumer = KafkaConsumer(
-        'actualizar_mapa',                              # El tópico desde el que va a consumir
-        bootstrap_servers='localhost:9092',             # Broker de Kafka
-        value_deserializer=lambda v: json.loads(v.decode('utf-8')),  # Decodifica los mensajes recibidos
-        auto_offset_reset='latest',                     # Consume desde el principio si no hay offset
+        'actualizar_mapa',
+        bootstrap_servers='localhost:9092',
+        value_deserializer=lambda v: json.loads(v.decode('utf-8')),
+        auto_offset_reset='latest',
     )
 
-    # Ciclo para recibir y procesar los mensajes
     for message in consumer:
-        mapa = message.value                            # Extraemos el mapa (array de strings)
-    return
+        mapa = message.value
+        return True
 
-# Cambia la variable global cliente
+    return False
+
 def recibirPosicionCliente():
     global cliente
     global destino
-    # Configuración del consumidor
+
     consumer = KafkaConsumer(
-        'procesar_viaje',  # El tópico desde el que va a consumir
-        bootstrap_servers='localhost:9092',  # Broker de Kafka
-        value_deserializer=lambda v: json.loads(v.decode('utf-8')),  # Deserializa los mensajes recibidos
-        auto_offset_reset='earliest',  # Consume desde el principio si no hay offset
-        enable_auto_commit=False,  # Desactivar el autocommit para que no se marquen automáticamente como leídos
-        group_id='taxi_group'  # Grupo de consumidores
+        'procesar_viaje',
+        bootstrap_servers='localhost:9092',
+        value_deserializer=lambda v: json.loads(v.decode('utf-8')),
+        auto_offset_reset='earliest',
+        enable_auto_commit=False,
+        group_id='taxi_group'
     )
 
-    # Bucle para leer mensajes
-    for message in consumer:
-        info = message.value
-        taxi_id = info['taxi_id']
+    try:
+        messages = consumer.poll(timeout_ms=1000)
+        if not messages:
+            return False
 
-        # Si el mensaje es para el ID_TAXI específico
-        if taxi_id == ID_TAXI:
-            cliente = info['posCliente']
-            destino = info['posDestino']
-            # Realizar el commit solo para el mensaje que se ha procesado
-            consumer.commit()
-    return None
+        for topic_partition, msgs in messages.items():
+            for message in msgs:
+                info = message.value
+                taxi_id = info['taxi_id']
 
-# Enviar actualizaciones del taxi
+                if taxi_id == ID_TAXI:
+                    cliente = info['posCliente']
+                    destino = info['posDestino']
+                    consumer.commit({
+                        topic_partition: OffsetAndMetadata(message.offset + 1, None)
+                    })
+                    return True
+    except Exception as e:
+        print(f"Error al recibir la orden del servicio: {e}")
+
+    return False
+
 def enviarPosicionTaxi(taxi_id, posicion, finalizado):
     producerTAXI = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
     topic = 'actualizaciones_taxi'
@@ -114,17 +132,12 @@ def enviarPosicionTaxi(taxi_id, posicion, finalizado):
     producerTAXI.send(topic, message)
     producerTAXI.flush()
 
-    return 
-
 def mostrarMapa(mapa):
     for y in range(ALTO):
         fila = []
         for x in range(ANCHO): 
             fila.append(mapa[x][y])
-
         print(' '.join(fila))
-
-    return
 
 def conexionSensor():
     global permisoMovimiento
@@ -132,27 +145,28 @@ def conexionSensor():
     socketSensor.bind((IP_SENSOR, PUERTO_SENSOR))
     socketSensor.listen(60)
 
-    print("SERVIDOR CREADO [" + IP_SENSOR + " : " + str(PUERTO_SENSOR) + "]")
+    print(f"SERVIDOR CREADO [{IP_SENSOR} : {PUERTO_SENSOR}]")
     conexion, addr = socketSensor.accept()
-
-    print("Conexión hecha con Sensor en " + str(addr))
+    print(f"Conexión hecha con Sensor en {addr}")
 
     while True:
         try:
-            mensaje = conexion.recv(4096)
-            if mensaje == FIN:   break
-            elif mensaje == OK:  permisoMovimiento = True
-            elif mensaje == KO:  permisoMovimiento = False
+            mensaje = conexion.recv(4096).decode()
+            if mensaje == FIN:
+                break
+            elif mensaje == OK:
+                permisoMovimiento = True
+            elif mensaje == KO:
+                permisoMovimiento = False
 
-            print("Mensaje Sensor entrante: [" + mensaje.decode() + "]")
-    
+            print(f"Mensaje Sensor entrante: [{mensaje}]")
+
         except Exception as e:
+            print(f"Error en conexión con el Sensor: {e}")
             break
 
     conexion.close()
     socketSensor.close()
-    
-    return 
 
 def movimiento(posX, posY, objetivo, movimiento):
     if movimiento == "Vertical":
@@ -161,34 +175,21 @@ def movimiento(posX, posY, objetivo, movimiento):
     else:
         ubicacion = posX
         destino = objetivo[0]
-    
-    posNueva = 0
 
+    posNueva = 0
     distanciaDirecta = abs(ubicacion - destino)
     distanciaPorFuera = ALTO - distanciaDirecta
 
     if distanciaDirecta < distanciaPorFuera:
         if ubicacion < destino:
-            if ubicacion == ANCHO-1:
-                posNueva = 0
-            else:
-                posNueva = ubicacion+1
+            posNueva = (ubicacion + 1) % ALTO
         else:
-            if ubicacion == 0:
-                posNueva = ANCHO-1
-            else:
-                posNueva = ubicacion-1
+            posNueva = (ubicacion - 1) % ALTO
     else:
         if ubicacion < destino:
-            if ubicacion == ANCHO-1:
-                posNueva = 0
-            else:
-                posNueva = ubicacion-1
+            posNueva = (ubicacion - 1) % ALTO
         else:
-            if ubicacion == ANCHO-1:
-                posNueva = 0
-            else:
-                posNueva = ubicacion+1
+            posNueva = (ubicacion + 1) % ALTO
 
     if movimiento == "Vertical":
         return (posX, posNueva)
@@ -222,30 +223,28 @@ def validarID(socketCentral):
     if respuesta.decode() == FIN:                   # El taxi tiene asignado la ID y puede ejercer
         print("ERROR: ID del taxi se está utilizando")
         socketCentral.close()
-        exit()
+        sys.exit(1)
     else:
-        ubicacion = (datos[1], datos[2])
+        ubicacion = (int(datos[1]), int(datos[2]))
         print("ID asignado con éxito")
-    
-    return 
 
 def conectarConServidor():
     global socketCentral
     socketCentral = socket.socket()
-    print("CONECTADO AL SERVIDOR CENTRAL EN [" + IP_CENTRAL + " : " + str(PUERTO_CENTRAL) + "]")
+    print(f"CONECTADO AL SERVIDOR CENTRAL EN [{IP_CENTRAL} : {PUERTO_CENTRAL}]")
     socketCentral.connect((IP_CENTRAL, PUERTO_CENTRAL))
     validarID(socketCentral)
-    return 
 
 ############## MAIN ################
 
-conectarConServidor()  # Servidor conectado con el DigitalEngine
+conectarConServidor()  # Validar ID
 
 # Hilo Sensor
 hiloSensor = threading.Thread(target=conexionSensor)
 hiloSensor.start()
 
+#hiloKafka = threading.Thread(target=cerebroDigitalEngine)
+#hiloKafka.start()
 
 hiloSensor.join()
-# Puedes unirte al hilo del consumidor de Kafka si lo deseas
-# hiloKafka.join()  # Descomenta si quieres esperar que el consumidor termine
+#hiloKafka.join()
