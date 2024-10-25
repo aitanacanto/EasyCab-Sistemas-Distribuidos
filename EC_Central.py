@@ -6,6 +6,7 @@ import math
 import time
 from kafka import KafkaProducer, KafkaConsumer
 import json
+from mapa import Mapa
 
 FORMAT = 'utf-8'
 ANCHO = 20
@@ -36,6 +37,10 @@ mapa = [[' ' for _ in range(ANCHO)] for _ in range(ALTO)]
 FIN = "<FIN>"
 OK = "OK"
 
+# Inicializar el mapa
+mapa_visual = Mapa()
+mapa_visual.inicializar_pantalla()
+
 #################### KAFKA #####################
 
 def conexionKafka():
@@ -56,6 +61,7 @@ def conexionKafka():
                 cambiarPosicionTaxiMapa(movimientoTaxi[0], movimientoTaxi[1])
                 actualizarPosicionTaxiFichero(movimientoTaxi[0], movimientoTaxi[1], movimientoTaxi[2])
                 enviarMensajeTaxiMapa()
+                mapa_visual.actualizar_mapa(mapa)
 
 def enviarMensajeTaxiMapa():
     global mapa
@@ -347,4 +353,5 @@ hiloTaxi.start()
 #hiloKafka.start()
 
 hiloTaxi.join()
-#hiloKafka.join()
+hiloKafka.join()
+mapa_visual.cerrar()
