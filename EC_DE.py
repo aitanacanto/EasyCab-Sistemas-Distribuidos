@@ -53,25 +53,32 @@ def realizarViaje():
     global clienteDentro
     global ubicacion
     global destino
+    global mapa
 
     while True:
         if permisoMovimiento:
             mostrarMapa(mapa)
             if not clienteDentro:
-                ubicacion = actualizarPosicion(ubicacion, cliente)
+                ubicacion = actualizarPosicion(cliente, destino)
                 enviarPosicionTaxi(ID_TAXI, ubicacion, False)
 
                 if ubicacion[0] == cliente[0] and ubicacion[1] == cliente[1]:
-                    print("El cliente está dentro del taxi")
                     clienteDentro = True
             else:
-                ubicacion = actualizarPosicion(ubicacion, destino)
+                ubicacion = actualizarPosicion(cliente, destino)
 
                 if ubicacion[0] == destino[0] and ubicacion[1] == destino[1]:
                     enviarPosicionTaxi(ID_TAXI, ubicacion, True)
                     break
                 else:
                     enviarPosicionTaxi(ID_TAXI, ubicacion, False)
+            
+            print("Posicion del taxi: " + str(ubicacion[0]) + ", " + str(ubicacion[1]))
+            print("Posición del destino: " + str(destino[0]) + ", " + str(destino[1]))
+            print("Posicion del cliente: " + str(cliente[0]) + ", " + str(cliente[1]))
+                        
+            while not recibirActualizacionMapa():
+                time.sleep(0.1)
 
         time.sleep(2)
 
@@ -80,7 +87,6 @@ def cerebroDigitalEngine():
 
     while True:
         if recibirActualizacionMapa() and recibirPosicionCliente():
-            print("Orden de viaje recibido, recogiendo al cliente...")
             clienteDentro = False
             realizarViaje()
 
@@ -147,6 +153,7 @@ def enviarPosicionTaxi(taxi_id, posicion, finalizado):
     message = {'taxi_id': taxi_id, 'taxi_posicion': posicion, 'viaje_finalizado': finalizado}
     producerTAXI.send(topic, message)
     producerTAXI.flush()
+    
 
 def conexionSensor():
     global permisoMovimiento
@@ -178,19 +185,17 @@ def conexionSensor():
     conexion.close()
     socketSensor.close()
 
-def movimiento(posX, posY, objetivo, direccion):
-    if direccion == "Vertical":
-        destino = objetivo[1]
-        if posY < destino:
-            posY = (posY + 1) % ALTO
-        else:
-            posY = (posY - 1) % ALTO
-    else:
-        destino = objetivo[0]
-        if posX < destino:
-            posX = (posX + 1) % ANCHO
-        else:
-            posX = (posX - 1) % ANCHO
+def movimiento(posX, posY, objetivo):
+    
+    if posY < objetivo[1]:
+        posY = posY + 1
+    elif posY > objetivo[1]:
+        posY = posY - 1
+    
+    if posX < objetivo[0]:
+        posX = posX + 1
+    elif posX < objetivo[0]:
+        posX = posX - 1
 
     return (posX, posY)
 
@@ -206,10 +211,7 @@ def actualizarPosicion(cliente, destino):
     else:
         objetivo = cliente
 
-    if posX == objetivo[0]:
-        return movimiento(posX, posY, objetivo, "Vertical")
-    else:
-        return movimiento(posX, posY, objetivo, "Horizontal")
+    return movimiento(posX, posY, objetivo)
 
 def validarID(socketCentral):
     global ubicacion

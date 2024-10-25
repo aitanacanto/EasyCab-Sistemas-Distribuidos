@@ -62,9 +62,10 @@ def conexionKafka():
 
         if movimientoTaxi is not None:
             with lock:
-                mostrarMapa()
+                print("Cambiando el mapa")
                 cambiarPosicionTaxiMapa(movimientoTaxi[0], movimientoTaxi[1])
                 actualizarPosicionTaxiFichero(movimientoTaxi[0], movimientoTaxi[1], movimientoTaxi[2])
+                mostrarMapa()
                 enviarMensajeTaxiMapa()
 
 def enviarMensajeTaxiMapa():
@@ -72,26 +73,24 @@ def enviarMensajeTaxiMapa():
     producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
     producerTaxi.send('actualizar_mapa', value=mapa)
     producerTaxi.flush()
-    print("Mapa enviado exitosamente")
     
-
 def enviarMensajeTaxiOrden(taxi_id, cliente, destino):
     producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
     topic = 'procesar_viaje'
     message = {'taxi_id': taxi_id, 'posCliente': cliente, 'posDestino': destino}
     producerTaxi.send(topic, value=message)
     producerTaxi.flush()
+
 def recibirMensajeTaxi():
     consumer = KafkaConsumer(
         'actualizaciones_taxi',
         bootstrap_servers='localhost:9092',
         value_deserializer=lambda v: json.loads(v.decode('utf-8')),
-        auto_offset_reset='earliest',
-        group_id='central_group'
+        auto_offset_reset='latest',
     )
 
     try:
-        message = consumer.poll(timeout_ms=1000)
+        message = consumer.poll(timeout_ms=5000)
         if not message:
             return None
 
@@ -109,6 +108,7 @@ def recibirMensajeTaxi():
         consumer.close()
 
     return None
+
 def recibirPeticionesCustomers():
     consumer = KafkaConsumer(
         'solicitud_taxi',
@@ -240,11 +240,13 @@ def mostrarMapa():
         for x in range(ANCHO):
             fila.append(mapa[x][y])
         print('.'.join(fila))
+
 def inicMapa():
     global mapa
     mapa = [[' ' for _ in range(ANCHO)] for _ in range(ALTO)]
     for item in arrayPos:
         mapa[item['x']][item['y']] = str(item['id'])
+
 def existeMismaID(customer_id):
     global mapa
     for y in range(ALTO):
@@ -252,6 +254,7 @@ def existeMismaID(customer_id):
             if mapa[x][y] == customer_id:
                 return True
     return False
+
 def cambiarPosicionTaxiMapa(taxi_id, taxi_posicion):
     global mapa
     for y in range(ALTO):
@@ -265,38 +268,57 @@ def cambiarPosicionTaxiMapa(taxi_id, taxi_posicion):
 
 def actualizarPosicionTaxiFichero(id_taxi, posicion, finalizado):
     nuevo_x, nuevo_y = posicion
-    with lock:
+    
+    # Leer las líneas del archivo fuera del lock para minimizar el tiempo que está bloqueado
+    try:
         with open(ARCHIVO_TAXI, 'r') as archivo:
             lineas = archivo.readlines()
+    except Exception as e:
+        print(f"Error al leer el archivo de taxis: {e}")
+        return
+    
+    taxiActualizado = False
+    nuevasLineas = []
 
-        taxiActualizado = False
-        nuevasLineas = []
+    # Procesar cada línea y actualizar la información del taxi si es necesario
+    for linea in lineas:
+        datos = linea.strip().replace('<', '').split('>')
 
-        for linea in lineas:
-            datos = linea.strip().replace('<', '').split('>')
+        # Verificar que la línea tenga al menos 5 elementos
+        if len(datos) >= 5:
+            taxi_id = datos[2]
+            if taxi_id == str(id_taxi):
+                taxi_x = str(nuevo_x)
+                taxi_y = str(nuevo_y)
+                taxiActualizado = True
 
-            if len(datos) >= 5:
-                taxi_id = datos[2]
-                if taxi_id == str(id_taxi):
-                    taxi_x = str(nuevo_x)
-                    taxi_y = str(nuevo_y)
-                    taxiActualizado = True
-
-                    if finalizado:
-                        nueva_linea = f"<SI><NO><{taxi_id}><{taxi_x}><{taxi_y}>\n"
-                    else:
-                        nueva_linea = f"<SI><SI><{taxi_id}><{taxi_x}><{taxi_y}>\n"
-                    nuevasLineas.append(nueva_linea)
+                if finalizado:
+                    nueva_linea = f"<SI><NO><{taxi_id}><{taxi_x}><{taxi_y}>\n"
                 else:
-                    nuevasLineas.append(linea)
+                    nueva_linea = f"<SI><SI><{taxi_id}><{taxi_x}><{taxi_y}>\n"
+                nuevasLineas.append(nueva_linea)
             else:
                 nuevasLineas.append(linea)
+        else:
+            # Línea no válida, agregar advertencia opcionalmente
+            print(f"Advertencia: línea inválida detectada: {linea.strip()}")
+            nuevasLineas.append(linea)
 
-        if not taxiActualizado:
-            print(f"No se encontró el taxi con ID {id_taxi} para actualizar.")
+    if not taxiActualizado:
+        print(f"No se encontró el taxi con ID {id_taxi} para actualizar.")
 
+    try:
         with open(ARCHIVO_TAXI, 'w') as archivo:
             archivo.writelines(nuevasLineas)
+        print(f"Posición del taxi con ID {id_taxi} actualizada con éxito.")
+    except Exception as e:
+        print(f"Error al actualizar la posición del taxi en el fichero: {e}")
+
+    # Añadir una pequeña espera para evitar un ciclo demasiado rápido que cause problemas de concurrencia
+    time.sleep(0.1)
+
+
+
 def hayTaxisDisponibles(cliente_x, cliente_y):
     with open(ARCHIVO_TAXI, 'r') as archivo:
         lineas = archivo.readlines()
@@ -318,7 +340,7 @@ def hayTaxisDisponibles(cliente_x, cliente_y):
             taxi_y = int(datos[4])
 
             if taxi_asignado == "SI" and taxi_operativo == "SI":
-                distancia = math.sqrt((taxi_x - cliente_x) ** 2 + (taxi_y - cliente_y) ** 2)
+                distancia = math.sqrt((taxi_x - cliente_x) * 2 + (taxi_y - cliente_y) * 2)
 
                 if distancia < minDistancia:
                     minDistancia = distancia
@@ -328,6 +350,7 @@ def hayTaxisDisponibles(cliente_x, cliente_y):
         return taxiMasCercano
     else:
         return None
+
 def meterTaxisBaseDatos(arrayPos):
     arrayTaxis = []
     for item in arrayPos:
