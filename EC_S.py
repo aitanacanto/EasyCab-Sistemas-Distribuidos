@@ -8,12 +8,12 @@ import time
 
 if len(sys.argv) != 3:
     print("ERROR: Número de argumentos arróneos")    
-    print("Formato correcto -> python3 EC_S <IP DigitalEngine> <Puerto DigitalEngine>")
+    print("Formato correcto -> python3 EC_S.py <IP DigitalEngine> <Puerto DigitalEngine>")
     exit()
 
 argumentos = sys.argv
 
-FIN = "FIN"
+FIN = "<FIN>"
 OK = "OK"
 KO = "KO"
 

@@ -50,8 +50,9 @@ def conexionKafka():
         if peticion is not None:
             meterEnMapa(peticion[1], peticion[2], peticion[0])
             meterEnMapa(peticion[3], peticion[4], peticion[0].upper())
-            print("RECIBIDO solicitud de viaje")
+            print("Recibido solicitud de viaje")
             taxi = hayTaxisDisponibles(peticion[1], peticion[2])
+            
             if taxi is not None:
                 mostrarMapa()
                 enviarMensajeTaxiMapa()

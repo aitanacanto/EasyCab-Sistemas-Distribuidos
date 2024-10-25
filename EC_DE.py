@@ -5,9 +5,10 @@ import time
 from kafka import KafkaConsumer, KafkaProducer
 from kafka.structs import OffsetAndMetadata
 import json
+import traceback
 
 if len(sys.argv) != 8:
-    print("ERROR: Número de argumentos incorrecto")    
+    print("ERROR: Número de argumentos incorrecto")
     print("Formato correcto -> python3 EC_DE <IP central> <Puerto central> <IP gestor> <Puerto gestor> <IP Sensor> <Puerto Sensor> <ID Taxi>")
     sys.exit(1)
 
@@ -36,8 +37,16 @@ destino = None
 clienteDentro = False
 mapa = None
 permisoMovimiento = False
+mapa_lock = threading.Lock()
 
 ############ FUNCIONES #############
+
+def mostrarMapa(mapa):
+    for y in range(ALTO):
+        fila = []
+        for x in range(ANCHO):
+            fila.append(mapa[x][y])
+        print('.'.join(fila))
 
 def realizarViaje():
     global permisoMovimiento
@@ -47,14 +56,16 @@ def realizarViaje():
 
     while True:
         if permisoMovimiento:
+            mostrarMapa(mapa)
             if not clienteDentro:
-                ubicacion = actualizarPosicion(ubicacion, cliente, mapa)
+                ubicacion = actualizarPosicion(ubicacion, cliente)
                 enviarPosicionTaxi(ID_TAXI, ubicacion, False)
 
                 if ubicacion[0] == cliente[0] and ubicacion[1] == cliente[1]:
+                    print("El cliente está dentro del taxi")
                     clienteDentro = True
             else:
-                ubicacion = actualizarPosicion(ubicacion, destino, mapa)
+                ubicacion = actualizarPosicion(ubicacion, destino)
 
                 if ubicacion[0] == destino[0] and ubicacion[1] == destino[1]:
                     enviarPosicionTaxi(ID_TAXI, ubicacion, True)
@@ -68,11 +79,12 @@ def cerebroDigitalEngine():
     global clienteDentro
 
     while True:
-        if recibirPosicionCliente() and recibirActualizacionMapa():
+        if recibirActualizacionMapa() and recibirPosicionCliente():
+            print("Orden de viaje recibido, recogiendo al cliente...")
             clienteDentro = False
             realizarViaje()
 
-        time.sleep(1)
+        time.sleep(2)
 
 def recibirActualizacionMapa():
     global mapa
@@ -85,10 +97,12 @@ def recibirActualizacionMapa():
     )
 
     for message in consumer:
-        mapa = message.value
+        with mapa_lock:
+            mapa = message.value
         return True
 
     return False
+
 
 def recibirPosicionCliente():
     global cliente
@@ -119,9 +133,11 @@ def recibirPosicionCliente():
                     consumer.commit({
                         topic_partition: OffsetAndMetadata(message.offset + 1, None)
                     })
+                    print("RECIBIDO ORDEN DE VIAJE")
                     return True
     except Exception as e:
         print(f"Error al recibir la orden del servicio: {e}")
+        traceback.print_exc()
 
     return False
 
@@ -132,16 +148,10 @@ def enviarPosicionTaxi(taxi_id, posicion, finalizado):
     producerTAXI.send(topic, message)
     producerTAXI.flush()
 
-def mostrarMapa(mapa):
-    for y in range(ALTO):
-        fila = []
-        for x in range(ANCHO): 
-            fila.append(mapa[x][y])
-        print(' '.join(fila))
-
 def conexionSensor():
     global permisoMovimiento
     socketSensor = socket.socket()
+    socketSensor.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     socketSensor.bind((IP_SENSOR, PUERTO_SENSOR))
     socketSensor.listen(60)
 
@@ -168,35 +178,23 @@ def conexionSensor():
     conexion.close()
     socketSensor.close()
 
-def movimiento(posX, posY, objetivo, movimiento):
-    if movimiento == "Vertical":
-        ubicacion = posY
+def movimiento(posX, posY, objetivo, direccion):
+    if direccion == "Vertical":
         destino = objetivo[1]
+        if posY < destino:
+            posY = (posY + 1) % ALTO
+        else:
+            posY = (posY - 1) % ALTO
     else:
-        ubicacion = posX
         destino = objetivo[0]
-
-    posNueva = 0
-    distanciaDirecta = abs(ubicacion - destino)
-    distanciaPorFuera = ALTO - distanciaDirecta
-
-    if distanciaDirecta < distanciaPorFuera:
-        if ubicacion < destino:
-            posNueva = (ubicacion + 1) % ALTO
+        if posX < destino:
+            posX = (posX + 1) % ANCHO
         else:
-            posNueva = (ubicacion - 1) % ALTO
-    else:
-        if ubicacion < destino:
-            posNueva = (ubicacion - 1) % ALTO
-        else:
-            posNueva = (ubicacion + 1) % ALTO
+            posX = (posX - 1) % ANCHO
 
-    if movimiento == "Vertical":
-        return (posX, posNueva)
-    else:
-        return (posNueva, posY)
+    return (posX, posY)
 
-def actualizarPosicion(cliente, destino, mapa):
+def actualizarPosicion(cliente, destino):
     global ubicacion
     global clienteDentro
 
@@ -215,12 +213,12 @@ def actualizarPosicion(cliente, destino, mapa):
 
 def validarID(socketCentral):
     global ubicacion
-    socketCentral.send(ID_TAXI.encode())            # Manda a central "START" para que este le mande si la ID solicitada está disponible
+    socketCentral.send(ID_TAXI.encode())
     respuesta = socketCentral.recv(4096)
-    
+
     datos = respuesta.decode().strip().replace('<', '').split('>')
 
-    if respuesta.decode() == FIN:                   # El taxi tiene asignado la ID y puede ejercer
+    if respuesta.decode() == FIN:
         print("ERROR: ID del taxi se está utilizando")
         socketCentral.close()
         sys.exit(1)
@@ -237,14 +235,12 @@ def conectarConServidor():
 
 ############## MAIN ################
 
-conectarConServidor()  # Validar ID
+conectarConServidor()
 
-# Hilo Sensor
 hiloSensor = threading.Thread(target=conexionSensor)
 hiloSensor.start()
 
-#hiloKafka = threading.Thread(target=cerebroDigitalEngine)
-#hiloKafka.start()
+hiloKafka = threading.Thread(target=cerebroDigitalEngine)
+hiloKafka.start()
 
 hiloSensor.join()
-#hiloKafka.join()
