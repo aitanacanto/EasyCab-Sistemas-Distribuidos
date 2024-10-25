@@ -4,9 +4,11 @@ import threading
 from threading import Lock
 import math
 import time
-from kafka import KafkaProducer, KafkaConsumer
+from kafka import KafkaProducer, KafkaConsumer, OffsetAndMetadata
 import json
-from mapa import Mapa
+
+############ COSAS A MEJORARA ############
+# Vaciar la mensajería de las solicitudes del customer a la central
 
 FORMAT = 'utf-8'
 ANCHO = 20
@@ -37,21 +39,23 @@ mapa = [[' ' for _ in range(ANCHO)] for _ in range(ALTO)]
 FIN = "<FIN>"
 OK = "OK"
 
-# Inicializar el mapa
-mapa_visual = Mapa()
-mapa_visual.inicializar_pantalla()
-
 #################### KAFKA #####################
+
+def meterEnMapa(pos_x, pos_y, elemento):
+    mapa[pos_x][pos_y] = elemento
 
 def conexionKafka():
     while True:
         peticion = recibirPeticionesCustomers()
-
         if peticion is not None:
+            meterEnMapa(peticion[1], peticion[2], peticion[0])
+            meterEnMapa(peticion[3], peticion[4], peticion[0].upper())
+            print("RECIBIDO solicitud de viaje")
             taxi = hayTaxisDisponibles(peticion[1], peticion[2])
             if taxi is not None:
-                enviarMensajeTaxiOrden(taxi[0], (peticion[1], peticion[2]), (peticion[3], peticion[4]))
+                mostrarMapa()
                 enviarMensajeTaxiMapa()
+                enviarMensajeTaxiOrden(taxi[0], (peticion[1], peticion[2]), (peticion[3], peticion[4]))
 
         movimientoTaxi = recibirMensajeTaxi()
 
@@ -61,13 +65,15 @@ def conexionKafka():
                 cambiarPosicionTaxiMapa(movimientoTaxi[0], movimientoTaxi[1])
                 actualizarPosicionTaxiFichero(movimientoTaxi[0], movimientoTaxi[1], movimientoTaxi[2])
                 enviarMensajeTaxiMapa()
-                mapa_visual.actualizar_mapa(mapa)
 
 def enviarMensajeTaxiMapa():
     global mapa
     producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
     producerTaxi.send('actualizar_mapa', value=mapa)
     producerTaxi.flush()
+    print("Mapa enviado exitosamente")
+    
+
 def enviarMensajeTaxiOrden(taxi_id, cliente, destino):
     producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
     topic = 'procesar_viaje'
@@ -107,32 +113,44 @@ def recibirPeticionesCustomers():
         'solicitud_taxi',
         bootstrap_servers='localhost:9092',
         value_deserializer=lambda v: json.loads(v.decode('utf-8')),
-        auto_offset_reset='earliest',
+        auto_offset_reset='earliest',  # Empieza desde el principio si no hay offset
+        group_id='central_group',  # Asegúrate de que todos los consumidores de este grupo tengan el mismo id
+        enable_auto_commit=False  # Desactivar el autocommit
     )
 
     try:
-        message = consumer.poll(timeout_ms=1000)
-        if not message:
-            return None
+        while True:
+            # Poll para obtener mensajes en una ventana de tiempo específica
+            messages = consumer.poll(timeout_ms=1000)
+            if not messages:
+                return None
 
-        for topic_partition, records in message.items():
-            for record in records:
-                info = record.value
-                customer_nombre = info['cliente_nombre']
-                customer_id = asignar_id_cliente()
+            # Procesar los mensajes recibidos
+            for topic_partition, records in messages.items():
+                for record in records:
+                    info = record.value
+                    customer_nombre = info['cliente_nombre']
+                    customer_id = asignar_id_cliente()
 
-                if not existeMismaID(customer_id):
-                    return [customer_id, info['ubicacion_x'], info['ubicacion_y'], info['destino_x'], info['destino_y']]
-                
-                if customer_id is not None:
-                    return [customer_id, info['ubicacion_x'], info['ubicacion_y'], info['destino_x'], info['destino_y']]
-                else:
-                    print("No hay IDs de clientes disponibles.")
-                    return None
+                    if not existeMismaID(customer_id):
+                        consumer.commit({topic_partition: OffsetAndMetadata(record.offset + 1, None)})
+                        return [customer_id, info['ubicacion_x'], info['ubicacion_y'], info['destino_x'], info['destino_y']]
+
+                    if customer_id is not None:
+                        consumer.commit({topic_partition: OffsetAndMetadata(record.offset + 1, None)})
+                        return [customer_id, info['ubicacion_x'], info['ubicacion_y'], info['destino_x'], info['destino_y']]
+                    else:
+                        print("No hay IDs de clientes disponibles.")
+                        return None
+
+    except Exception as e:
+        print(f"Error al recibir peticiones: {e}")
+
     finally:
         consumer.close()
 
     return None
+
 def asignar_id_cliente():
     for i, (letra, estado) in enumerate(CUSTOMERS_ACTIVOS):
         if not estado:
@@ -165,7 +183,7 @@ def validarUbicacion(id_taxi, conn):
                 if taxi_id == id_taxi:
                     if taxi_asignado == "NO" and taxi_operativo == "NO":
                         taxiEncontrado = True
-                        nueva_linea = f"<SI><NO><{taxi_id}><{datos[3]}><{datos[4]}>\n"
+                        nueva_linea = f"<SI><SI><{taxi_id}><{datos[3]}><{datos[4]}>\n"
                         nuevasLineas.append(nueva_linea)
                         mensaje = "<" + OK + "><"+ datos[3] +"><" + datos[4] + ">"
                         print("Confirmado el ID del taxi: " + mensaje)
@@ -220,7 +238,7 @@ def mostrarMapa():
         fila = []
         for x in range(ANCHO):
             fila.append(mapa[x][y])
-        print(' '.join(fila))
+        print('.'.join(fila))
 def inicMapa():
     global mapa
     mapa = [[' ' for _ in range(ANCHO)] for _ in range(ALTO)]
@@ -349,9 +367,8 @@ print("[EMPEZANDO] Servidor inicializando...")
 hiloTaxi = threading.Thread(target=conexionTaxi)
 hiloTaxi.start()
 
-#hiloKafka = threading.Thread(target=conexionKafka)
-#hiloKafka.start()
+hiloKafka = threading.Thread(target=conexionKafka)
+hiloKafka.start()
 
 hiloTaxi.join()
 hiloKafka.join()
-mapa_visual.cerrar()
