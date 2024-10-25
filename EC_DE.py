@@ -148,13 +148,6 @@ def enviarPosicionTaxi(taxi_id, posicion, finalizado):
     producerTAXI.send(topic, message)
     producerTAXI.flush()
 
-def mostrarMapa(mapa):
-    for y in range(ALTO):
-        fila = []
-        for x in range(ANCHO): 
-            fila.append(mapa[x][y])
-        print(' '.join(fila))
-
 def conexionSensor():
     global permisoMovimiento
     socketSensor = socket.socket()
