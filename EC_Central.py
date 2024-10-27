@@ -1,7 +1,6 @@
 import socket
 import sys
 import threading
-from threading import Lock
 import math
 import time
 from kafka import KafkaProducer, KafkaConsumer, OffsetAndMetadata
@@ -20,6 +19,7 @@ MAX_CONEXIONES = 22
 CUSTOMERS_ACTIVOS = list((letra, False) for letra in 'abcdefghijklmnopqrstuvwxyz')
 TAMANO_CELDA = 30
 ANCHO_BORDE = 1
+REFRESCO_MAPA = 1
 
 if len(sys.argv) != 4:
     print("ERROR: Número de argumentos incorrecto")    
@@ -36,9 +36,9 @@ ARCHIVO_TAXI = 'taxi.txt'
 SERVER = socket.gethostbyname(socket.gethostname())
 DIRECCION = (SERVER, PUERTO_ESCUCHA)
 
-lock = Lock()
-
 global mapa
+global listaEsperaClientes
+listaEsperaClientes = []
 
 FIN = "<FIN>"
 OK = "OK"
@@ -50,22 +50,31 @@ def meterEnMapa(pos_x, pos_y, elemento):
     mapaPygame.actualizar_mapa_pygame(mapa)
 
 def conexionKafka():
+    global listaEsperaClientes
     while True:
-        peticion = recibirPeticionesCustomers()
-        if peticion is not None:
-            meterEnMapa(peticion[1], peticion[2], peticion[0])
-            meterEnMapa(peticion[3], peticion[4], peticion[0].upper())
-            print("Recibido solicitud de viaje")
-            taxi = hayTaxisDisponibles(peticion[1], peticion[2])
-            
-            if taxi is not None:
-                enviarMensajeTaxiMapa()
-                enviarMensajeTaxiOrden(taxi[0], (peticion[1], peticion[2]), (peticion[3], peticion[4]))
 
-        movimientoTaxi = recibirMensajeTaxi()
+        if listaEsperaClientes:
+            peticiones = listaEsperaClientes
+            listaEsperaClientes = []
+        else:
+            peticiones = recibirPeticionesCustomers()
 
-        if movimientoTaxi is not None:
-            with lock:
+        if peticiones:
+            for peticion in peticiones:
+                taxi = hayTaxisDisponibles(peticion[1], peticion[2])
+                if taxi is not None:
+                    cambiarEstadoTaxiFichero(peticion[0], "NO")
+                    meterEnMapa(peticion[1], peticion[2], peticion[0])
+                    meterEnMapa(peticion[3], peticion[4], peticion[0].upper())
+                    enviarMensajeTaxiMapa()
+                    enviarMensajeTaxiOrden(taxi[0], (peticion[1], peticion[2]), (peticion[3], peticion[4]), peticion[0].upper())
+                else:
+                    listaEsperaClientes.append(peticion)
+
+        movimientosTaxi = recibirMensajeTaxi()
+        
+        if movimientosTaxi:
+            for movimientoTaxi in movimientosTaxi:
                 cambiarPosicionTaxiMapa(movimientoTaxi[0], movimientoTaxi[1], movimientoTaxi[3], movimientoTaxi[4])
                 actualizarPosicionTaxiFichero(movimientoTaxi[0], movimientoTaxi[1], movimientoTaxi[2])
                 enviarMensajeTaxiMapa()
@@ -76,10 +85,10 @@ def enviarMensajeTaxiMapa():
     producerTaxi.send('actualizar_mapa', value=mapa)
     producerTaxi.flush()
     
-def enviarMensajeTaxiOrden(taxi_id, cliente, destino):
+def enviarMensajeTaxiOrden(taxi_id, cliente, destino, letraDestino):
     producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
     topic = 'procesar_viaje'
-    message = {'taxi_id': taxi_id, 'posCliente': cliente, 'posDestino': destino}
+    message = {'taxi_id': taxi_id, 'posCliente': cliente, 'posDestino': destino, 'letraDestino': letraDestino}
     producerTaxi.send(topic, value=message)
     producerTaxi.flush()
 
@@ -88,24 +97,34 @@ def recibirMensajeTaxi():
         'actualizaciones_taxi',
         bootstrap_servers='localhost:9092',
         value_deserializer=lambda v: json.loads(v.decode('utf-8')),
-        auto_offset_reset='latest',
+        auto_offset_reset='earliest',  # Leer desde el principio si es necesario
+        enable_auto_commit=True,        # Permite confirmar automáticamente los offsets
+        group_id='central_taxi_group'   # Asegurar que el grupo es el adecuado
     )
 
-    try:
-        message = consumer.poll(timeout_ms=5000)
-        if not message:
-            return None
+    peticiones = []
+    start_time = time.time()
 
-        for topic_partition, records in message.items():
-            for record in records:
-                taxi_status = record.value
-                taxi_id = taxi_status.get('taxi_id')
-                taxi_posicion = taxi_status.get('taxi_posicion')
-                viaje_finalizado = taxi_status.get('viaje_finalizado')
-                antigua_posicion = taxi_status.get('antigua_posicion')
-                estado_sensor = taxi_status.get('estado_sensor')  # Obtener estado del sensor (OK o KO)
-                return (taxi_id, taxi_posicion, viaje_finalizado, antigua_posicion, estado_sensor)
+    try:
+        while time.time() - start_time < REFRESCO_MAPA:
+            message = consumer.poll(timeout_ms=100)
             
+            if not message:
+                continue
+
+            for topic_partition, records in message.items():
+                for record in records:
+                    taxi_status = record.value
+                    taxi_id = taxi_status.get('taxi_id')
+                    taxi_posicion = taxi_status.get('taxi_posicion')
+                    viaje_finalizado = taxi_status.get('viaje_finalizado')
+                    antigua_posicion = taxi_status.get('antigua_posicion')
+                    estado_sensor = taxi_status.get('estado_sensor')
+                    peticion = (taxi_id, taxi_posicion, viaje_finalizado, antigua_posicion, estado_sensor)
+                    peticiones.append(peticion)
+
+        return peticiones
+
     except Exception as e:
         print(f"Error al recibir el mensaje del taxi: {e}")
     finally:
@@ -123,25 +142,33 @@ def recibirPeticionesCustomers():
         enable_auto_commit=False  
     )
 
-    try:
-        while True:
-            messages = consumer.poll(timeout_ms=1000)
-            if not messages:
-                return None
+    peticiones = []
+    start_time = time.time()
 
+    try:
+        while time.time() - start_time < REFRESCO_MAPA:
+            messages = consumer.poll(timeout_ms=100)
+
+            if not messages:
+                continue
+            
             for topic_partition, records in messages.items():
                 for record in records:
                     info = record.value
-                    customer_nombre = info['cliente_nombre']
                     customer_id = asignar_id_cliente()
 
                     if not existeMismaID(customer_id):
                         consumer.commit({topic_partition: OffsetAndMetadata(record.offset + 1, None)})
-                        return [customer_id, info['ubicacion_x'], info['ubicacion_y'], info['destino_x'], info['destino_y']]
-
+                        ubicacion_x = info['ubicacion_x']
+                        ubicacion_y = info['ubicacion_y']
+                        destino_x = info['destino_x']
+                        destino_y = info['destino_y']
+                        peticion = (customer_id, ubicacion_x, ubicacion_y, destino_x, destino_y)
+                        peticiones.append(peticion)
                     else:
                         print("No hay IDs de clientes disponibles.")
                         return None
+        return peticiones
 
     except Exception as e:
         print(f"Error al recibir peticiones: {e}")
@@ -165,42 +192,76 @@ def liberar_id_cliente(customer_id):
 
 ################## SOCKET TAXI ##################
 
+def cambiarEstadoTaxiFichero(id_taxi, operativo):
+    taxiEncontrado = False
+    nuevasLineas = []
+
+    try:
+        with open(ARCHIVO_TAXI, 'r') as archivo:
+            lineas = archivo.readlines()
+
+        for linea in lineas:
+            datos = linea.strip().replace('<', '').split('>')
+            taxi_asignado = datos[0]
+            taxi_id = datos[2]
+            taxi_x = datos[3]
+            taxi_y = datos[4]
+
+            if taxi_id == id_taxi:
+                taxiEncontrado = True
+                nuevaLinea = f"<{taxi_asignado}><{operativo}><{taxi_id}><{taxi_x}><{taxi_y}>"
+                nuevasLineas.append(nuevaLinea)
+            else:
+                taxiEncontrado = False
+                nuevasLineas.append(linea)
+        
+        with open(ARCHIVO_TAXI, 'w') as archivo:
+            archivo.writelines(nuevasLineas)
+
+        if not taxiEncontrado:
+            print("Error al cambiar el estado al taxi")
+            return False
+        else:
+            return True
+
+    except Exception as e:
+        print(f"EXCEPCIÓN ---> No se ha podido comunicar con la base de datos del taxi: {e}")
+
 def validarUbicacion(id_taxi, conn):
     taxiEncontrado = False
     nuevasLineas = []
 
     try:
-        with lock:
-            with open(ARCHIVO_TAXI, 'r') as archivo:
-                lineas = archivo.readlines()
+        with open(ARCHIVO_TAXI, 'r') as archivo:
+            lineas = archivo.readlines()
 
-            for linea in lineas:
-                datos = linea.strip().replace('<', '').split('>')
+        for linea in lineas:
+            datos = linea.strip().replace('<', '').split('>')
 
-                taxi_asignado = datos[0]
-                taxi_operativo = datos[1]
-                taxi_id = datos[2]
+            taxi_asignado = datos[0]
+            taxi_operativo = datos[1]
+            taxi_id = datos[2]
 
-                if taxi_id == id_taxi:
-                    if taxi_asignado == "NO" and taxi_operativo == "NO":
-                        taxiEncontrado = True
-                        nueva_linea = f"<SI><SI><{taxi_id}><{datos[3]}><{datos[4]}>\n"
-                        nuevasLineas.append(nueva_linea)
-                        mensaje = "<" + OK + "><"+ datos[3] +"><" + datos[4] + ">"
-                        print("Confirmado el ID del taxi: " + mensaje)
-                        conn.send(mensaje.encode(FORMAT))
-                    else:
-                        taxiEncontrado = False
-                        nuevasLineas.append(linea)
+            if taxi_id == id_taxi:
+                if taxi_asignado == "NO" and taxi_operativo == "NO":
+                    taxiEncontrado = True
+                    nueva_linea = f"<SI><SI><{taxi_id}><{datos[3]}><{datos[4]}>\n"
+                    nuevasLineas.append(nueva_linea)
+                    mensaje = "<" + OK + "><"+ datos[3] +"><" + datos[4] + ">"
+                    print("Confirmado el ID del taxi: " + mensaje)
+                    conn.send(mensaje.encode(FORMAT))
                 else:
+                    taxiEncontrado = False
                     nuevasLineas.append(linea)
+            else:
+                nuevasLineas.append(linea)
 
-            if not taxiEncontrado:
-                conn.send(FIN.encode(FORMAT))
-                return
+        if not taxiEncontrado:
+            conn.send(FIN.encode(FORMAT))
+            return
 
-            with open(ARCHIVO_TAXI, 'w') as archivo:
-                archivo.writelines(nuevasLineas)
+        with open(ARCHIVO_TAXI, 'w') as archivo:
+            archivo.writelines(nuevasLineas)
 
     except Exception as e:
         print(f"EXCEPCIÓN ---> No se ha podido comunicar con el taxi: {e}")
@@ -241,7 +302,7 @@ def inicMapa(arrayPos):
     mapa = [[' ' for _ in range(ANCHO)] for _ in range(ALTO)]
     for item in arrayPos:
         if item['id'].isdigit():
-            mapa[item['x']][item['y']] = (str(item['id']) + 'v')
+            mapa[item['x']][item['y']] = (str(item['id']) + 'r')
 
 def existeMismaID(customer_id):
     global mapa
@@ -261,7 +322,6 @@ def cambiarPosicionTaxiMapa(taxi_id, taxi_posicion, antigua_posicion, estado_sen
     else:
         mapa[taxi_posicion[0]][taxi_posicion[1]] = f"{taxi_id}r"
     mapaPygame.actualizar_mapa_pygame(mapa)  # Actualizar Pygame después de modificar el mapa
-
 
 ################## BASE DE DATOS ##################
 
@@ -309,7 +369,6 @@ def actualizarPosicionTaxiFichero(id_taxi, posicion, finalizado):
     try:
         with open(ARCHIVO_TAXI, 'w') as archivo:
             archivo.writelines(nuevasLineas)
-        print(f"Posición del taxi con ID {id_taxi} actualizada con éxito.")
     except Exception as e:
         print(f"Error al actualizar la posición del taxi en el fichero: {e}")
 
@@ -366,8 +425,8 @@ def leerMapaFichero():
 
             if len(datos) == 3:
                 id_localizacion = datos[0]
-                posicion_x = int(datos[1]) - 1
-                posicion_y = int(datos[2]) - 1
+                posicion_x = int(datos[1])
+                posicion_y = int(datos[2])
 
                 arrayPos.append({
                     'id': id_localizacion,

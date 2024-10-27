@@ -4,13 +4,13 @@ import queue
 
 # Definir constantes y colores
 COLOR_FONDO = (211, 211, 211)  # Gris claro
-COLOR_TAXI = (255, 255, 0)      # Amarillo
 COLOR_CLIENTE = (0, 0, 255)     # Azul
-COLOR_DESTINO = (255, 10, 100)  
+COLOR_DESTINO = (255, 255, 0)  
 COLOR_BORDE = (0, 0, 0)         # Negro
 COLOR_TEXTO = (0, 0, 0)         # Negro (para el texto dentro de las casillas)
 COLOR_VERDE = (0, 255, 0)
 COLOR_ROJO = (255, 0, 0)
+COLOR_AMARILLO = (255, 255, 0)
 
 # Tamaño de las celdas
 TAMANO_CELDA = 30
@@ -46,6 +46,8 @@ def dibujar_mapa(mapa_data):
             elif mapa_data[x][y][0].isdigit():  # Taxi
                 if mapa_data[x][y][1] == 'r':
                     color = COLOR_ROJO
+                elif mapa_data[x][y][1] == 'a':
+                    color = COLOR_AMARILLO
                 else:
                     color = COLOR_VERDE
                 texto = mapa_data[x][y][0]
