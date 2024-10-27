@@ -42,11 +42,16 @@ mapa_lock = threading.Lock()
 ############ FUNCIONES #############
 
 def mostrarMapa(mapa):
+    linea_horizontal = '-' * (ANCHO * 2 + 1)
+
+    print(linea_horizontal)
     for y in range(ALTO):
-        fila = []
+        fila = "|"
         for x in range(ANCHO):
-            fila.append(mapa[x][y])
-        print('.'.join(fila))
+            elemento = mapa[x][y] if mapa[x][y] != ' ' else ' '
+            fila += f"{elemento}|"
+        print(fila)
+        print(linea_horizontal)
 
 def realizarViaje():
     global permisoMovimiento
@@ -58,9 +63,11 @@ def realizarViaje():
     while True:
         if permisoMovimiento:
             mostrarMapa(mapa)
+            antiguaPosicion = ubicacion
+
             if not clienteDentro:
                 ubicacion = actualizarPosicion(cliente, destino)
-                enviarPosicionTaxi(ID_TAXI, ubicacion, False)
+                enviarPosicionTaxi(ID_TAXI, ubicacion, antiguaPosicion, False, OK)
 
                 if ubicacion[0] == cliente[0] and ubicacion[1] == cliente[1]:
                     clienteDentro = True
@@ -68,17 +75,15 @@ def realizarViaje():
                 ubicacion = actualizarPosicion(cliente, destino)
 
                 if ubicacion[0] == destino[0] and ubicacion[1] == destino[1]:
-                    enviarPosicionTaxi(ID_TAXI, ubicacion, True)
+                    enviarPosicionTaxi(ID_TAXI, ubicacion, antiguaPosicion, True, OK)
                     break
                 else:
-                    enviarPosicionTaxi(ID_TAXI, ubicacion, False)
-            
-            print("Posicion del taxi: " + str(ubicacion[0]) + ", " + str(ubicacion[1]))
-            print("Posición del destino: " + str(destino[0]) + ", " + str(destino[1]))
-            print("Posicion del cliente: " + str(cliente[0]) + ", " + str(cliente[1]))
+                    enviarPosicionTaxi(ID_TAXI, ubicacion, antiguaPosicion, False, OK)
                         
             while not recibirActualizacionMapa():
                 time.sleep(0.1)
+        else:
+            enviarPosicionTaxi(ID_TAXI, ubicacion, antiguaPosicion, False, KO)
 
         time.sleep(2)
 
@@ -89,8 +94,6 @@ def cerebroDigitalEngine():
         if recibirActualizacionMapa() and recibirPosicionCliente():
             clienteDentro = False
             realizarViaje()
-
-        time.sleep(2)
 
 def recibirActualizacionMapa():
     global mapa
@@ -108,7 +111,6 @@ def recibirActualizacionMapa():
         return True
 
     return False
-
 
 def recibirPosicionCliente():
     global cliente
@@ -147,14 +149,13 @@ def recibirPosicionCliente():
 
     return False
 
-def enviarPosicionTaxi(taxi_id, posicion, finalizado):
+def enviarPosicionTaxi(taxi_id, posicion, antiguaPosicion, finalizado, estadoSensor):
     producerTAXI = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
     topic = 'actualizaciones_taxi'
-    message = {'taxi_id': taxi_id, 'taxi_posicion': posicion, 'viaje_finalizado': finalizado}
+    message = {'taxi_id': taxi_id, 'taxi_posicion': posicion, 'viaje_finalizado': finalizado, 'antigua_posicion': antiguaPosicion, 'estado_sensor': estadoSensor}
     producerTAXI.send(topic, message)
     producerTAXI.flush()
     
-
 def conexionSensor():
     global permisoMovimiento
     socketSensor = socket.socket()
@@ -194,7 +195,7 @@ def movimiento(posX, posY, objetivo):
     
     if posX < objetivo[0]:
         posX = posX + 1
-    elif posX < objetivo[0]:
+    elif posX > objetivo[0]:
         posX = posX - 1
 
     return (posX, posY)

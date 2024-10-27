@@ -6,15 +6,20 @@ import math
 import time
 from kafka import KafkaProducer, KafkaConsumer, OffsetAndMetadata
 import json
+import mapaPygame
+
 
 ############ COSAS A MEJORARA ############
 # Vaciar la mensajería de las solicitudes del customer a la central
 
-FORMAT = 'utf-8'
 ANCHO = 20
 ALTO = 20
+
+FORMAT = 'utf-8'
 MAX_CONEXIONES = 22
 CUSTOMERS_ACTIVOS = list((letra, False) for letra in 'abcdefghijklmnopqrstuvwxyz')
+TAMANO_CELDA = 30
+ANCHO_BORDE = 1
 
 if len(sys.argv) != 4:
     print("ERROR: Número de argumentos incorrecto")    
@@ -34,7 +39,6 @@ DIRECCION = (SERVER, PUERTO_ESCUCHA)
 lock = Lock()
 
 global mapa
-mapa = [[' ' for _ in range(ANCHO)] for _ in range(ALTO)]
 
 FIN = "<FIN>"
 OK = "OK"
@@ -43,6 +47,7 @@ OK = "OK"
 
 def meterEnMapa(pos_x, pos_y, elemento):
     mapa[pos_x][pos_y] = elemento
+    mapaPygame.actualizar_mapa_pygame(mapa)
 
 def conexionKafka():
     while True:
@@ -54,7 +59,6 @@ def conexionKafka():
             taxi = hayTaxisDisponibles(peticion[1], peticion[2])
             
             if taxi is not None:
-                mostrarMapa()
                 enviarMensajeTaxiMapa()
                 enviarMensajeTaxiOrden(taxi[0], (peticion[1], peticion[2]), (peticion[3], peticion[4]))
 
@@ -62,10 +66,8 @@ def conexionKafka():
 
         if movimientoTaxi is not None:
             with lock:
-                print("Cambiando el mapa")
-                cambiarPosicionTaxiMapa(movimientoTaxi[0], movimientoTaxi[1])
+                cambiarPosicionTaxiMapa(movimientoTaxi[0], movimientoTaxi[1], movimientoTaxi[3], movimientoTaxi[4])
                 actualizarPosicionTaxiFichero(movimientoTaxi[0], movimientoTaxi[1], movimientoTaxi[2])
-                mostrarMapa()
                 enviarMensajeTaxiMapa()
 
 def enviarMensajeTaxiMapa():
@@ -100,7 +102,9 @@ def recibirMensajeTaxi():
                 taxi_id = taxi_status.get('taxi_id')
                 taxi_posicion = taxi_status.get('taxi_posicion')
                 viaje_finalizado = taxi_status.get('viaje_finalizado')
-                return (taxi_id, taxi_posicion, viaje_finalizado)
+                antigua_posicion = taxi_status.get('antigua_posicion')
+                estado_sensor = taxi_status.get('estado_sensor')  # Obtener estado del sensor (OK o KO)
+                return (taxi_id, taxi_posicion, viaje_finalizado, antigua_posicion, estado_sensor)
             
     except Exception as e:
         print(f"Error al recibir el mensaje del taxi: {e}")
@@ -114,19 +118,17 @@ def recibirPeticionesCustomers():
         'solicitud_taxi',
         bootstrap_servers='localhost:9092',
         value_deserializer=lambda v: json.loads(v.decode('utf-8')),
-        auto_offset_reset='earliest',  # Empieza desde el principio si no hay offset
-        group_id='central_group',  # Asegúrate de que todos los consumidores de este grupo tengan el mismo id
-        enable_auto_commit=False  # Desactivar el autocommit
+        auto_offset_reset='earliest',  
+        group_id='central_group',  
+        enable_auto_commit=False  
     )
 
     try:
         while True:
-            # Poll para obtener mensajes en una ventana de tiempo específica
             messages = consumer.poll(timeout_ms=1000)
             if not messages:
                 return None
 
-            # Procesar los mensajes recibidos
             for topic_partition, records in messages.items():
                 for record in records:
                     info = record.value
@@ -137,9 +139,6 @@ def recibirPeticionesCustomers():
                         consumer.commit({topic_partition: OffsetAndMetadata(record.offset + 1, None)})
                         return [customer_id, info['ubicacion_x'], info['ubicacion_y'], info['destino_x'], info['destino_y']]
 
-                    if customer_id is not None:
-                        consumer.commit({topic_partition: OffsetAndMetadata(record.offset + 1, None)})
-                        return [customer_id, info['ubicacion_x'], info['ubicacion_y'], info['destino_x'], info['destino_y']]
                     else:
                         print("No hay IDs de clientes disponibles.")
                         return None
@@ -158,6 +157,7 @@ def asignar_id_cliente():
             CUSTOMERS_ACTIVOS[i] = (letra, True) 
             return letra
     return None
+
 def liberar_id_cliente(customer_id):
     for i, (letra, estado) in enumerate(CUSTOMERS_ACTIVOS):
         if letra == customer_id:
@@ -204,6 +204,7 @@ def validarUbicacion(id_taxi, conn):
 
     except Exception as e:
         print(f"EXCEPCIÓN ---> No se ha podido comunicar con el taxi: {e}")
+
 def verificacionTaxi(conn, addr):
     try:
         mensaje = conn.recv(4096)
@@ -214,6 +215,7 @@ def verificacionTaxi(conn, addr):
         print("EXCEPCION ---> NO SE HA PODIDO COMUNICAR CON EL TAXI")
     finally:
         conn.close()
+
 def startTaxi(server):
     server.listen()
     while True:
@@ -225,6 +227,7 @@ def startTaxi(server):
         else:
             conn.send("OOppsss... DEMASIADAS CONEXIONES. Tendrás que esperar a que alguien se vaya".encode(FORMAT))
             conn.close()
+
 def conexionTaxi():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind(DIRECCION)
@@ -233,19 +236,12 @@ def conexionTaxi():
 
 ###################### MAPA ######################
 
-def mostrarMapa():
-    global mapa
-    for y in range(ALTO):
-        fila = []
-        for x in range(ANCHO):
-            fila.append(mapa[x][y])
-        print('.'.join(fila))
-
-def inicMapa():
+def inicMapa(arrayPos):
     global mapa
     mapa = [[' ' for _ in range(ANCHO)] for _ in range(ALTO)]
     for item in arrayPos:
-        mapa[item['x']][item['y']] = str(item['id'])
+        if item['id'].isdigit():
+            mapa[item['x']][item['y']] = (str(item['id']) + 'v')
 
 def existeMismaID(customer_id):
     global mapa
@@ -255,21 +251,23 @@ def existeMismaID(customer_id):
                 return True
     return False
 
-def cambiarPosicionTaxiMapa(taxi_id, taxi_posicion):
-    global mapa
-    for y in range(ALTO):
-        for x in range(ANCHO):
-            if mapa[x][y] == str(taxi_id):
-                mapa[x][y] = '.'
-                break
-    mapa[taxi_posicion[0]][taxi_posicion[1]] = str(taxi_id)
+def cambiarPosicionTaxiMapa(taxi_id, taxi_posicion, antigua_posicion, estado_sensor):
+
+    # Limpiar la antigua posición del taxi
+    mapa[antigua_posicion[0]][antigua_posicion[1]] = ' '
+    # Añadir el nuevo estado del taxi en la nueva posición
+    if estado_sensor == OK:
+        mapa[taxi_posicion[0]][taxi_posicion[1]] = f"{taxi_id}v"
+    else:
+        mapa[taxi_posicion[0]][taxi_posicion[1]] = f"{taxi_id}r"
+    mapaPygame.actualizar_mapa_pygame(mapa)  # Actualizar Pygame después de modificar el mapa
+
 
 ################## BASE DE DATOS ##################
 
 def actualizarPosicionTaxiFichero(id_taxi, posicion, finalizado):
     nuevo_x, nuevo_y = posicion
     
-    # Leer las líneas del archivo fuera del lock para minimizar el tiempo que está bloqueado
     try:
         with open(ARCHIVO_TAXI, 'r') as archivo:
             lineas = archivo.readlines()
@@ -293,9 +291,10 @@ def actualizarPosicionTaxiFichero(id_taxi, posicion, finalizado):
                 taxiActualizado = True
 
                 if finalizado:
-                    nueva_linea = f"<SI><NO><{taxi_id}><{taxi_x}><{taxi_y}>\n"
-                else:
                     nueva_linea = f"<SI><SI><{taxi_id}><{taxi_x}><{taxi_y}>\n"
+                else:
+                    nueva_linea = f"<SI><NO><{taxi_id}><{taxi_x}><{taxi_y}>\n"
+
                 nuevasLineas.append(nueva_linea)
             else:
                 nuevasLineas.append(linea)
@@ -314,10 +313,7 @@ def actualizarPosicionTaxiFichero(id_taxi, posicion, finalizado):
     except Exception as e:
         print(f"Error al actualizar la posición del taxi en el fichero: {e}")
 
-    # Añadir una pequeña espera para evitar un ciclo demasiado rápido que cause problemas de concurrencia
     time.sleep(0.1)
-
-
 
 def hayTaxisDisponibles(cliente_x, cliente_y):
     with open(ARCHIVO_TAXI, 'r') as archivo:
@@ -340,7 +336,7 @@ def hayTaxisDisponibles(cliente_x, cliente_y):
             taxi_y = int(datos[4])
 
             if taxi_asignado == "SI" and taxi_operativo == "SI":
-                distancia = math.sqrt((taxi_x - cliente_x) * 2 + (taxi_y - cliente_y) * 2)
+                distancia = math.sqrt((taxi_x - cliente_x) ** 2 + (taxi_y - cliente_y) ** 2)
 
                 if distancia < minDistancia:
                     minDistancia = distancia
@@ -360,6 +356,7 @@ def meterTaxisBaseDatos(arrayPos):
     with open(ARCHIVO_TAXI, 'w') as archivo:
         for item in arrayTaxis:
             archivo.write(f"<NO><NO><{item['id']}><{item['x']}><{item['y']}>\n")
+
 def leerMapaFichero():
     arrayPos = []
 
@@ -384,15 +381,19 @@ def leerMapaFichero():
 
 arrayPos = leerMapaFichero()
 meterTaxisBaseDatos(arrayPos)
-inicMapa()
+inicMapa(arrayPos)
 
 print("[EMPEZANDO] Servidor inicializando...")
+
+mapaPygame.iniciar_pygame(ANCHO, ALTO)
 
 hiloTaxi = threading.Thread(target=conexionTaxi)
 hiloTaxi.start()
 
 hiloKafka = threading.Thread(target=conexionKafka)
 hiloKafka.start()
+
+mapaPygame.main_pygame_loop()
 
 hiloTaxi.join()
 hiloKafka.join()
