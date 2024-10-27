@@ -1,2 +1,3 @@
 /.venv
 taxi.txt
+__pycache__/

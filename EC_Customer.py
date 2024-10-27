@@ -1,7 +1,8 @@
 import tkinter as tk
 from tkinter import messagebox
-from kafka import KafkaProducer
+from kafka import KafkaProducer, KafkaConsumer, OffsetAndMetadata
 import json
+import traceback
 
 # Función para serializar el mensaje a JSON
 def json_serializer(data):
@@ -31,6 +32,45 @@ def enviar_solicitud_taxi(cliente_nombre, ubicacion, destino):
     print(f"Solicitud enviada, en breves su taxi pasara a por usted, ", cliente_nombre,".")
     producer.flush()
     
+def recibirPosicionCliente():
+    global cliente
+    global destino
+    global letraUbicacion
+
+    consumer = KafkaConsumer(
+        'comunicacion_Customer',
+        bootstrap_servers='localhost:9092',
+        value_deserializer=lambda v: json.loads(v.decode('utf-8')),
+        auto_offset_reset='earliest',
+        enable_auto_commit=False,
+        group_id='customer_grup'
+    )
+
+    try:
+        messages = consumer.poll(timeout_ms=1000)
+        if not messages:
+            return False
+
+        for topic_partition, msgs in messages.items():
+            for message in msgs:
+                info = message.value
+                taxi_id = info['taxi_id']
+
+                if taxi_id == ID_TAXI:
+                    cliente = info['posCliente']
+                    destino = info['posDestino']
+                    letraUbicacion = info['letraDestino']
+                    consumer.commit({
+                        topic_partition: OffsetAndMetadata(message.offset + 1, None)
+                    })
+                    print("RECIBIDO ORDEN DE VIAJE")
+                    return True
+    except Exception as e:
+        print(f"Error al recibir la orden del servicio: {e}")
+        traceback.print_exc()
+
+    return False
+
 # Función para procesar los datos del formulario
 def procesar_formulario():
     cliente_nombre = etiqueta_cliente_nombre.get()

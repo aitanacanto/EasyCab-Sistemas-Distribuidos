@@ -31,6 +31,7 @@ PUERTO_SENSOR = int(argumentos[6])
 ID_TAXI = argumentos[7]
 
 # Variables compartidas
+letraUbicacion = None
 ubicacion = None
 cliente = None
 destino = None
@@ -42,36 +43,48 @@ mapa_lock = threading.Lock()
 ############ FUNCIONES #############
 
 def mostrarMapa(mapa):
+    linea_horizontal = '-' * (ANCHO * 2 + 1)
+
+    print(linea_horizontal)
     for y in range(ALTO):
-        fila = []
+        fila = "|"
         for x in range(ANCHO):
-            fila.append(mapa[x][y])
-        print('.'.join(fila))
+            elemento = mapa[x][y] if mapa[x][y] != ' ' else ' '
+            fila += f"{elemento}|"
+        print(fila)
+        print(linea_horizontal)
 
 def realizarViaje():
     global permisoMovimiento
     global clienteDentro
     global ubicacion
     global destino
+    global mapa
 
     while True:
         if permisoMovimiento:
             mostrarMapa(mapa)
+            antiguaPosicion = ubicacion
+
             if not clienteDentro:
-                ubicacion = actualizarPosicion(ubicacion, cliente)
-                enviarPosicionTaxi(ID_TAXI, ubicacion, False)
+                ubicacion = actualizarPosicion(cliente, destino, mapa)
+                enviarPosicionTaxi(ID_TAXI, ubicacion, antiguaPosicion, False, OK)
 
                 if ubicacion[0] == cliente[0] and ubicacion[1] == cliente[1]:
-                    print("El cliente está dentro del taxi")
                     clienteDentro = True
             else:
-                ubicacion = actualizarPosicion(ubicacion, destino)
+                ubicacion = actualizarPosicion(cliente, destino, mapa)
 
                 if ubicacion[0] == destino[0] and ubicacion[1] == destino[1]:
-                    enviarPosicionTaxi(ID_TAXI, ubicacion, True)
+                    enviarPosicionTaxi(ID_TAXI, ubicacion, antiguaPosicion, True, OK)
                     break
                 else:
-                    enviarPosicionTaxi(ID_TAXI, ubicacion, False)
+                    enviarPosicionTaxi(ID_TAXI, ubicacion, antiguaPosicion, False, OK)
+                        
+            while not recibirActualizacionMapa():
+                time.sleep(0.1)
+        else:
+            enviarPosicionTaxi(ID_TAXI, ubicacion, antiguaPosicion, False, KO)
 
         time.sleep(2)
 
@@ -80,11 +93,8 @@ def cerebroDigitalEngine():
 
     while True:
         if recibirActualizacionMapa() and recibirPosicionCliente():
-            print("Orden de viaje recibido, recogiendo al cliente...")
             clienteDentro = False
             realizarViaje()
-
-        time.sleep(2)
 
 def recibirActualizacionMapa():
     global mapa
@@ -103,10 +113,10 @@ def recibirActualizacionMapa():
 
     return False
 
-
 def recibirPosicionCliente():
     global cliente
     global destino
+    global letraUbicacion
 
     consumer = KafkaConsumer(
         'procesar_viaje',
@@ -130,6 +140,7 @@ def recibirPosicionCliente():
                 if taxi_id == ID_TAXI:
                     cliente = info['posCliente']
                     destino = info['posDestino']
+                    letraUbicacion = info['letraDestino']
                     consumer.commit({
                         topic_partition: OffsetAndMetadata(message.offset + 1, None)
                     })
@@ -141,13 +152,14 @@ def recibirPosicionCliente():
 
     return False
 
-def enviarPosicionTaxi(taxi_id, posicion, finalizado):
+def enviarPosicionTaxi(taxi_id, posicion, antiguaPosicion, finalizado, estadoSensor):
     producerTAXI = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
     topic = 'actualizaciones_taxi'
-    message = {'taxi_id': taxi_id, 'taxi_posicion': posicion, 'viaje_finalizado': finalizado}
+    message = {'taxi_id': taxi_id, 'taxi_posicion': posicion, 'viaje_finalizado': finalizado, 'antigua_posicion': antiguaPosicion, 'estado_sensor': estadoSensor}
     producerTAXI.send(topic, message)
     producerTAXI.flush()
-
+    print("POSICION ENVIADA A CENTRAL")
+    
 def conexionSensor():
     global permisoMovimiento
     socketSensor = socket.socket()
@@ -178,23 +190,48 @@ def conexionSensor():
     conexion.close()
     socketSensor.close()
 
-def movimiento(posX, posY, objetivo, direccion):
-    if direccion == "Vertical":
-        destino = objetivo[1]
-        if posY < destino:
-            posY = (posY + 1) % ALTO
-        else:
-            posY = (posY - 1) % ALTO
+def movimiento(posX, posY, objetivo, mapa):
+    global letraUbicacion
+
+    if   posY < objetivo[1] and posX < objetivo[0] and (mapa[posX+1][posY+1] == ' ' or mapa[posX+1][posY+1] == letraUbicacion or mapa[posX+1][posY+1] == letraUbicacion.lower()):
+        posX += 1
+        posY += 1
+    elif posY > objetivo[1] and posX > objetivo[0] and (mapa[posX-1][posY-1] == ' ' or mapa[posX-1][posY-1] == letraUbicacion or mapa[posX-1][posY-1] == letraUbicacion.lower()):
+        posX -= 1
+        posY -= 1
+    elif posY > objetivo[1] and posX < objetivo[0] and (mapa[posX+1][posY-1] == ' ' or mapa[posX+1][posY-1] == letraUbicacion or mapa[posX+1][posY-1] == letraUbicacion.lower()):
+        posX += 1
+        posY -= 1
+    elif posY < objetivo[1] and posX > objetivo[0] and (mapa[posX-1][posY+1] == ' ' or mapa[posX-1][posY+1] == letraUbicacion or mapa[posX-1][posY+1] == letraUbicacion.lower()):
+        posX -= 1
+        posY += 1
+
+    elif posX < objetivo[0] and (mapa[posX+1][posY] == ' ' or mapa[posX+1][posY] == letraUbicacion or mapa[posX+1][posY] == letraUbicacion.lower()):
+        posX += 1
+    elif posX > objetivo[0] and (mapa[posX-1][posY] == ' ' or mapa[posX-1][posY] == letraUbicacion or mapa[posX-1][posY] == letraUbicacion.lower()):
+        posX -= 1
+    elif posY < objetivo[1] and (mapa[posX][posY+1] == ' ' or mapa[posX][posY+1] == letraUbicacion or mapa[posX][posY+1] == letraUbicacion.lower()):
+        posY += 1
+    elif posY > objetivo[1] and (mapa[posX][posY-1] == ' ' or mapa[posX][posY-1] == letraUbicacion or mapa[posX][posY-1] == letraUbicacion.lower()):
+        posY -= 1
+
     else:
-        destino = objetivo[0]
-        if posX < destino:
-            posX = (posX + 1) % ANCHO
-        else:
-            posX = (posX - 1) % ANCHO
+        if mapa[posX-1][posY+1] == ' ':
+            posX -= 1
+            posY += 1
+        elif mapa[posX-1][posY-1] == ' ':
+            posX -= 1
+            posY -= 1
+        elif mapa[posX+1][posY+1] == ' ':
+            posX += 1
+            posY += 1
+        elif mapa[posX+1][posY-1] == ' ':
+            posX += 1
+            posY -= 1
 
     return (posX, posY)
 
-def actualizarPosicion(cliente, destino):
+def actualizarPosicion(cliente, destino, mapa):
     global ubicacion
     global clienteDentro
 
@@ -206,10 +243,7 @@ def actualizarPosicion(cliente, destino):
     else:
         objetivo = cliente
 
-    if posX == objetivo[0]:
-        return movimiento(posX, posY, objetivo, "Vertical")
-    else:
-        return movimiento(posX, posY, objetivo, "Horizontal")
+    return movimiento(posX, posY, objetivo, mapa)
 
 def validarID(socketCentral):
     global ubicacion
