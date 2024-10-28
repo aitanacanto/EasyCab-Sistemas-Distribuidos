@@ -7,21 +7,24 @@ from kafka.structs import OffsetAndMetadata
 import json
 import traceback
 
+# Argumentos y configuraciones
 if len(sys.argv) != 8:
     print("ERROR: Número de argumentos incorrecto")
     print("Formato correcto -> python3 EC_DE <IP central> <Puerto central> <IP gestor> <Puerto gestor> <IP Sensor> <Puerto Sensor> <ID Taxi>")
     sys.exit(1)
 
-# Variables iniciales del programa
 argumentos = sys.argv
 FIN = "<FIN>"
-START = "START"
 OK = "OK"
 KO = "KO"
 
 ALTO = 20
 ANCHO = 20
 
+# Evento global de parada
+stop_event = threading.Event()
+
+# Variables de configuración y estado
 IP_CENTRAL = argumentos[1]
 PUERTO_CENTRAL = int(argumentos[2])
 IP_GESTOR = argumentos[3]
@@ -44,7 +47,6 @@ mapa_lock = threading.Lock()
 
 def mostrarMapa(mapa):
     linea_horizontal = '-' * (ANCHO * 2 + 1)
-
     print(linea_horizontal)
     for y in range(ALTO):
         fila = "|"
@@ -55,13 +57,9 @@ def mostrarMapa(mapa):
         print(linea_horizontal)
 
 def realizarViaje():
-    global permisoMovimiento
-    global clienteDentro
-    global ubicacion
-    global destino
-    global mapa
+    while not stop_event.is_set():  # Revisa stop_event en cada ciclo
+        global permisoMovimiento, clienteDentro, ubicacion, destino, mapa
 
-    while True:
         if permisoMovimiento:
             mostrarMapa(mapa)
             antiguaPosicion = ubicacion
@@ -74,14 +72,13 @@ def realizarViaje():
                     clienteDentro = True
             else:
                 ubicacion = actualizarPosicion(cliente, destino, mapa)
-
                 if ubicacion[0] == destino[0] and ubicacion[1] == destino[1]:
                     enviarPosicionTaxi(ID_TAXI, ubicacion, antiguaPosicion, True, OK)
                     break
                 else:
                     enviarPosicionTaxi(ID_TAXI, ubicacion, antiguaPosicion, False, OK)
-                        
-            while not recibirActualizacionMapa():
+
+            while not recibirActualizacionMapa() and not stop_event.is_set():
                 time.sleep(0.1)
         else:
             enviarPosicionTaxi(ID_TAXI, ubicacion, antiguaPosicion, False, KO)
@@ -90,8 +87,7 @@ def realizarViaje():
 
 def cerebroDigitalEngine():
     global clienteDentro
-
-    while True:
+    while not stop_event.is_set():  # Revisa stop_event en cada ciclo
         if recibirActualizacionMapa() and recibirPosicionCliente():
             clienteDentro = False
             realizarViaje()
@@ -107,6 +103,8 @@ def recibirActualizacionMapa():
     )
 
     for message in consumer:
+        if stop_event.is_set():  # Revisa stop_event en cada ciclo de consumo
+            return False
         with mapa_lock:
             mapa = message.value
         return True
@@ -114,9 +112,7 @@ def recibirActualizacionMapa():
     return False
 
 def recibirPosicionCliente():
-    global cliente
-    global destino
-    global letraUbicacion
+    global cliente, destino, letraUbicacion
 
     consumer = KafkaConsumer(
         'procesar_viaje',
@@ -129,21 +125,19 @@ def recibirPosicionCliente():
 
     try:
         messages = consumer.poll(timeout_ms=1000)
-        if not messages:
+        
+        if not messages or stop_event.is_set():
             return False
 
         for topic_partition, msgs in messages.items():
             for message in msgs:
                 info = message.value
                 taxi_id = info['taxi_id']
-
                 if taxi_id == ID_TAXI:
                     cliente = info['posCliente']
                     destino = info['posDestino']
                     letraUbicacion = info['letraDestino']
-                    consumer.commit({
-                        topic_partition: OffsetAndMetadata(message.offset + 1, None)
-                    })
+                    consumer.commit({topic_partition: OffsetAndMetadata(message.offset + 1, None)})
                     print("RECIBIDO ORDEN DE VIAJE")
                     return True
     except Exception as e:
@@ -159,9 +153,10 @@ def enviarPosicionTaxi(taxi_id, posicion, antiguaPosicion, finalizado, estadoSen
     producerTAXI.send(topic, message)
     producerTAXI.flush()
     print("POSICION ENVIADA A CENTRAL")
-    
+
 def conexionSensor():
     global permisoMovimiento
+    
     socketSensor = socket.socket()
     socketSensor.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     socketSensor.bind((IP_SENSOR, PUERTO_SENSOR))
@@ -171,18 +166,39 @@ def conexionSensor():
     conexion, addr = socketSensor.accept()
     print(f"Conexión hecha con Sensor en {addr}")
 
-    while True:
+    timeout_seconds = 5
+    last_message_time = time.time()
+
+    while not stop_event.is_set():  # Revisa stop_event
         try:
+            conexion.settimeout(timeout_seconds)
             mensaje = conexion.recv(4096).decode()
-            if mensaje == FIN:
-                break
-            elif mensaje == OK:
+            if mensaje == OK:
                 permisoMovimiento = True
+                last_message_time = time.time()
             elif mensaje == KO:
                 permisoMovimiento = False
+                last_message_time = time.time()
+            elif mensaje == FIN:
+                conexion.sendall(FIN.encode())
+                print("Recibido FIN, terminando conexión...")
+                stop_event.set()  # Activa evento de parada
+                break
 
             print(f"Mensaje Sensor entrante: [{mensaje}]")
 
+            if time.time() - last_message_time > timeout_seconds:
+                print("Tiempo de espera agotado. Enviando FIN...")
+                enviarPosicionTaxi(ID_TAXI, ubicacion, ubicacion, False, FIN)
+                stop_event.set()
+                break
+
+        except socket.timeout:
+            if time.time() - last_message_time > timeout_seconds:
+                print("Tiempo de espera agotado. Enviando FIN...")
+                enviarPosicionTaxi(ID_TAXI, ubicacion, ubicacion, False, FIN)
+                stop_event.set()
+                break
         except Exception as e:
             print(f"Error en conexión con el Sensor: {e}")
             break
@@ -190,29 +206,28 @@ def conexionSensor():
     conexion.close()
     socketSensor.close()
 
-def movimiento(posX, posY, objetivo, mapa):
-    global letraUbicacion
+def movimiento(posX, posY, objetivo, mapa, letraUbicacion):
 
-    if   posY < objetivo[1] and posX < objetivo[0] and (mapa[posX+1][posY+1] == ' ' or mapa[posX+1][posY+1] == letraUbicacion or mapa[posX+1][posY+1] == letraUbicacion.lower()):
+    if   posY < objetivo[1] and posX < objetivo[0] and (mapa[posX+1][posY+1] == ' ' or mapa[posX+1][posY+1] == letraUbicacion):
         posX += 1
         posY += 1
-    elif posY > objetivo[1] and posX > objetivo[0] and (mapa[posX-1][posY-1] == ' ' or mapa[posX-1][posY-1] == letraUbicacion or mapa[posX-1][posY-1] == letraUbicacion.lower()):
+    elif posY > objetivo[1] and posX > objetivo[0] and (mapa[posX-1][posY-1] == ' ' or mapa[posX-1][posY-1] == letraUbicacion):
         posX -= 1
         posY -= 1
-    elif posY > objetivo[1] and posX < objetivo[0] and (mapa[posX+1][posY-1] == ' ' or mapa[posX+1][posY-1] == letraUbicacion or mapa[posX+1][posY-1] == letraUbicacion.lower()):
+    elif posY > objetivo[1] and posX < objetivo[0] and (mapa[posX+1][posY-1] == ' ' or mapa[posX+1][posY-1] == letraUbicacion):
         posX += 1
         posY -= 1
-    elif posY < objetivo[1] and posX > objetivo[0] and (mapa[posX-1][posY+1] == ' ' or mapa[posX-1][posY+1] == letraUbicacion or mapa[posX-1][posY+1] == letraUbicacion.lower()):
+    elif posY < objetivo[1] and posX > objetivo[0] and (mapa[posX-1][posY+1] == ' ' or mapa[posX-1][posY+1] == letraUbicacion):
         posX -= 1
         posY += 1
 
-    elif posX < objetivo[0] and (mapa[posX+1][posY] == ' ' or mapa[posX+1][posY] == letraUbicacion or mapa[posX+1][posY] == letraUbicacion.lower()):
+    elif posX < objetivo[0] and (mapa[posX+1][posY] == ' ' or mapa[posX+1][posY] == letraUbicacion):
         posX += 1
-    elif posX > objetivo[0] and (mapa[posX-1][posY] == ' ' or mapa[posX-1][posY] == letraUbicacion or mapa[posX-1][posY] == letraUbicacion.lower()):
+    elif posX > objetivo[0] and (mapa[posX-1][posY] == ' ' or mapa[posX-1][posY] == letraUbicacion):
         posX -= 1
-    elif posY < objetivo[1] and (mapa[posX][posY+1] == ' ' or mapa[posX][posY+1] == letraUbicacion or mapa[posX][posY+1] == letraUbicacion.lower()):
+    elif posY < objetivo[1] and (mapa[posX][posY+1] == ' ' or mapa[posX][posY+1] == letraUbicacion):
         posY += 1
-    elif posY > objetivo[1] and (mapa[posX][posY-1] == ' ' or mapa[posX][posY-1] == letraUbicacion or mapa[posX][posY-1] == letraUbicacion.lower()):
+    elif posY > objetivo[1] and (mapa[posX][posY-1] == ' ' or mapa[posX][posY-1] == letraUbicacion):
         posY -= 1
 
     else:
@@ -234,36 +249,37 @@ def movimiento(posX, posY, objetivo, mapa):
 def actualizarPosicion(cliente, destino, mapa):
     global ubicacion
     global clienteDentro
+    global letraUbicacion
 
     posX = ubicacion[0]
     posY = ubicacion[1]
 
     if clienteDentro:
         objetivo = destino
+        letraObjetivo = letraUbicacion.upper()
     else:
         objetivo = cliente
+        letraObjetivo = letraUbicacion.lower()
 
-    return movimiento(posX, posY, objetivo, mapa)
+    return movimiento(posX, posY, objetivo, mapa, letraObjetivo)
 
 def validarID(socketCentral):
     global ubicacion
     socketCentral.send(ID_TAXI.encode())
     respuesta = socketCentral.recv(4096)
 
-    datos = respuesta.decode().strip().replace('<', '').split('>')
-
     if respuesta.decode() == FIN:
-        print("ERROR: ID del taxi se está utilizando")
+        print("ERROR: ID del taxi ya está en uso")
         socketCentral.close()
         sys.exit(1)
     else:
+        datos = respuesta.decode().strip().replace('<', '').split('>')
         ubicacion = (int(datos[1]), int(datos[2]))
         print("ID asignado con éxito")
 
 def conectarConServidor():
     global socketCentral
     socketCentral = socket.socket()
-    print(f"CONECTADO AL SERVIDOR CENTRAL EN [{IP_CENTRAL} : {PUERTO_CENTRAL}]")
     socketCentral.connect((IP_CENTRAL, PUERTO_CENTRAL))
     validarID(socketCentral)
 
@@ -278,3 +294,7 @@ hiloKafka = threading.Thread(target=cerebroDigitalEngine)
 hiloKafka.start()
 
 hiloSensor.join()
+hiloKafka.join()
+
+if stop_event.is_set():
+    sys.exit("Programa terminado correctamente.")

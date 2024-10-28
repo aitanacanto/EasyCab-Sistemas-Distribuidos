@@ -51,6 +51,10 @@ def meterEnMapa(pos_x, pos_y, elemento):
 
 def conexionKafka():
     global listaEsperaClientes
+
+    peticionesXtaxis = []
+    customerXtaxis = []
+
     while True:
 
         if listaEsperaClientes:
@@ -62,7 +66,10 @@ def conexionKafka():
         if peticiones:
             for peticion in peticiones:
                 taxi = hayTaxisDisponibles(peticion[1], peticion[2])
+
                 if taxi is not None:
+                    customerXtaxis.append((peticion[0], taxi[0]))
+                    peticionesXtaxis.append((peticion,taxi[0]))
                     cambiarEstadoTaxiFichero(peticion[0], "NO")
                     meterEnMapa(peticion[1], peticion[2], peticion[0])
                     meterEnMapa(peticion[3], peticion[4], peticion[0].upper())
@@ -75,8 +82,19 @@ def conexionKafka():
         
         if movimientosTaxi:
             for movimientoTaxi in movimientosTaxi:
+
+                if movimientoTaxi[4] == FIN:
+                    for tupla in peticionesXtaxis:
+                        if tupla[1] == movimientoTaxi[0]:
+                            listaEsperaClientes.append(tupla[0])
+
+                if movimientoTaxi[2]:
+                    for tupla in customerXtaxis:
+                        if tupla[1] == movimientoTaxi[0]:
+                            enviarMensajeCustomer('2', tupla[0], "FINALIZADO")
+
                 cambiarPosicionTaxiMapa(movimientoTaxi[0], movimientoTaxi[1], movimientoTaxi[3], movimientoTaxi[4])
-                actualizarPosicionTaxiFichero(movimientoTaxi[0], movimientoTaxi[1], movimientoTaxi[2])
+                actualizarPosicionTaxiFichero(movimientoTaxi[0], movimientoTaxi[1], movimientoTaxi[2], movimientoTaxi[4])
                 enviarMensajeTaxiMapa()
 
 def enviarMensajeTaxiMapa():
@@ -91,6 +109,14 @@ def enviarMensajeTaxiOrden(taxi_id, cliente, destino, letraDestino):
     message = {'taxi_id': taxi_id, 'posCliente': cliente, 'posDestino': destino, 'letraDestino': letraDestino}
     producerTaxi.send(topic, value=message)
     producerTaxi.flush()
+
+def enviarMensajeCustomer(codigoMensaje, customerID, mensaje):
+    producerCustomer = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
+    topic = 'mensajes_a_consumer'
+    message = {'codigoMensaje': codigoMensaje, 'customerID': customerID, 'mensaje': mensaje}
+    producerCustomer.send(topic, value=message)
+    producerCustomer.flush()
+    print("ENVIADO mensaje a customer: " + codigoMensaje + ", " + customerID + ", " + mensaje)
 
 def recibirMensajeTaxi():
     consumer = KafkaConsumer(
@@ -159,6 +185,10 @@ def recibirPeticionesCustomers():
 
                     if not existeMismaID(customer_id):
                         consumer.commit({topic_partition: OffsetAndMetadata(record.offset + 1, None)})
+                        numero_identificacion = info['numero_identificacion']
+
+                        enviarMensajeCustomer('1', customer_id, str(numero_identificacion))
+
                         ubicacion_x = info['ubicacion_x']
                         ubicacion_y = info['ubicacion_y']
                         destino_x = info['destino_x']
@@ -195,7 +225,7 @@ def liberar_id_cliente(customer_id):
 def cambiarEstadoTaxiFichero(id_taxi, operativo):
     taxiEncontrado = False
     nuevasLineas = []
-
+    
     try:
         with open(ARCHIVO_TAXI, 'r') as archivo:
             lineas = archivo.readlines()
@@ -219,7 +249,6 @@ def cambiarEstadoTaxiFichero(id_taxi, operativo):
             archivo.writelines(nuevasLineas)
 
         if not taxiEncontrado:
-            print("Error al cambiar el estado al taxi")
             return False
         else:
             return True
@@ -248,7 +277,6 @@ def validarUbicacion(id_taxi, conn):
                     nueva_linea = f"<SI><SI><{taxi_id}><{datos[3]}><{datos[4]}>\n"
                     nuevasLineas.append(nueva_linea)
                     mensaje = "<" + OK + "><"+ datos[3] +"><" + datos[4] + ">"
-                    print("Confirmado el ID del taxi: " + mensaje)
                     conn.send(mensaje.encode(FORMAT))
                 else:
                     taxiEncontrado = False
@@ -313,7 +341,6 @@ def existeMismaID(customer_id):
     return False
 
 def cambiarPosicionTaxiMapa(taxi_id, taxi_posicion, antigua_posicion, estado_sensor):
-
     # Limpiar la antigua posición del taxi
     mapa[antigua_posicion[0]][antigua_posicion[1]] = ' '
     # Añadir el nuevo estado del taxi en la nueva posición
@@ -321,11 +348,12 @@ def cambiarPosicionTaxiMapa(taxi_id, taxi_posicion, antigua_posicion, estado_sen
         mapa[taxi_posicion[0]][taxi_posicion[1]] = f"{taxi_id}v"
     else:
         mapa[taxi_posicion[0]][taxi_posicion[1]] = f"{taxi_id}r"
+
     mapaPygame.actualizar_mapa_pygame(mapa)  # Actualizar Pygame después de modificar el mapa
 
 ################## BASE DE DATOS ##################
 
-def actualizarPosicionTaxiFichero(id_taxi, posicion, finalizado):
+def actualizarPosicionTaxiFichero(id_taxi, posicion, finalizado, estadoSensor):
     nuevo_x, nuevo_y = posicion
     
     try:
@@ -352,6 +380,8 @@ def actualizarPosicionTaxiFichero(id_taxi, posicion, finalizado):
 
                 if finalizado:
                     nueva_linea = f"<SI><SI><{taxi_id}><{taxi_x}><{taxi_y}>\n"
+                elif estadoSensor == FIN:
+                    nueva_linea = f"<NO><NO><{taxi_id}><{taxi_x}><{taxi_y}>\n"
                 else:
                     nueva_linea = f"<SI><NO><{taxi_id}><{taxi_x}><{taxi_y}>\n"
 

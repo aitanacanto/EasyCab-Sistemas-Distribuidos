@@ -3,6 +3,12 @@ from tkinter import messagebox
 from kafka import KafkaProducer, KafkaConsumer, OffsetAndMetadata
 import json
 import traceback
+import threading
+import random
+
+
+global numeroIdentificacion
+global id_customer
 
 # Función para serializar el mensaje a JSON
 def json_serializer(data):
@@ -12,15 +18,69 @@ def json_serializer(data):
 producer = KafkaProducer(bootstrap_servers=['localhost:9092'],
                          value_serializer=json_serializer)
 
+def recibirMensajesDeCentral():
+    global id_customer
+    global numeroIdentificacion
+
+    consumer = KafkaConsumer(
+        'mensajes_a_consumer',
+        bootstrap_servers='localhost:9092',
+        value_deserializer=lambda v: json.loads(v.decode('utf-8')),
+        auto_offset_reset='earliest',
+        enable_auto_commit=False,
+        group_id='customer_group'
+    )
+
+    try:
+        messages = consumer.poll(timeout_ms=100)
+
+        if messages:
+            for topic_partition, msgs in messages.items():
+                for message in msgs:
+                    info = message.value
+                    codigoMensaje = info['codigoMensaje']
+
+                    print("Mensaje recibido: " + str(info['codigoMensaje']) + ", " + str(info['customerID']) + ", " + str(info['mensaje']))
+
+                    if codigoMensaje == '1':
+                        if numeroIdentificacion == str(info['mensaje']):
+                            id_customer = str(info['customerID'])
+                            print("ID asignado al Customer")
+                            consumer.commit({topic_partition: OffsetAndMetadata(message.offset + 1, None)})
+
+                    elif codigoMensaje == '2':
+                        if id_customer == str(info['customerID']):
+                            consumer.commit({topic_partition: OffsetAndMetadata(message.offset + 1, None)})
+
+                            if str(info['mensaje']) == "RECOGER":
+                                print("El taxi va a por ti")
+
+                            elif str(info['mensaje']) == "FINALIZADO":
+                                print("Aparcao, hasta la proxima")
+
+    except Exception as e:
+        print(f"Error al recibir la orden del servicio: {e}")
+        traceback.print_exc()
+
+def mensajeriaConCentral():
+    while True:
+        recibirMensajesDeCentral()
+
+
 # Función para enviar la solicitud de taxi
 def enviar_solicitud_taxi(cliente_nombre, ubicacion, destino):
-    
+    global numeroIdentificacion
+
     ubicacion_x = ubicacion[0]
     ubicacion_y = ubicacion[1]
     destino_x = destino[0]
     destino_y = destino[1]
+    numero_aleatorio = str(random.randint(1, 10000))
+
+    numeroIdentificacion = numero_aleatorio
 
     solicitud = {
+        "numero_identificacion": numero_aleatorio,
         "cliente_nombre": cliente_nombre,
         "ubicacion_x": ubicacion_x,
         "ubicacion_y": ubicacion_y,
@@ -32,45 +92,6 @@ def enviar_solicitud_taxi(cliente_nombre, ubicacion, destino):
     print(f"Solicitud enviada, en breves su taxi pasara a por usted, ", cliente_nombre,".")
     producer.flush()
     
-def recibirPosicionCliente():
-    global cliente
-    global destino
-    global letraUbicacion
-
-    consumer = KafkaConsumer(
-        'comunicacion_Customer',
-        bootstrap_servers='localhost:9092',
-        value_deserializer=lambda v: json.loads(v.decode('utf-8')),
-        auto_offset_reset='earliest',
-        enable_auto_commit=False,
-        group_id='customer_grup'
-    )
-
-    try:
-        messages = consumer.poll(timeout_ms=1000)
-        if not messages:
-            return False
-
-        for topic_partition, msgs in messages.items():
-            for message in msgs:
-                info = message.value
-                taxi_id = info['taxi_id']
-
-                if taxi_id == ID_TAXI:
-                    cliente = info['posCliente']
-                    destino = info['posDestino']
-                    letraUbicacion = info['letraDestino']
-                    consumer.commit({
-                        topic_partition: OffsetAndMetadata(message.offset + 1, None)
-                    })
-                    print("RECIBIDO ORDEN DE VIAJE")
-                    return True
-    except Exception as e:
-        print(f"Error al recibir la orden del servicio: {e}")
-        traceback.print_exc()
-
-    return False
-
 # Función para procesar los datos del formulario
 def procesar_formulario():
     cliente_nombre = etiqueta_cliente_nombre.get()
@@ -93,6 +114,10 @@ def procesar_formulario():
     
     # Mostrar mensaje de éxito
     messagebox.showinfo("Éxito", "Solicitud de taxi enviada con éxito!")
+
+    hiloRecibirMensajes = threading.Thread(target=mensajeriaConCentral)
+    hiloRecibirMensajes.start()
+    hiloRecibirMensajes.join()
 
 # Crear la ventana principal
 ventana = tk.Tk()
