@@ -92,6 +92,7 @@ def conexionKafka():
                     for tupla in customerXtaxis:
                         if tupla[1] == movimientoTaxi[0]:
                             enviarMensajeCustomer('2', tupla[0], "FINALIZADO")
+                            customerXtaxis.remove(tupla)
 
                 cambiarPosicionTaxiMapa(movimientoTaxi[0], movimientoTaxi[1], movimientoTaxi[3], movimientoTaxi[4])
                 actualizarPosicionTaxiFichero(movimientoTaxi[0], movimientoTaxi[1], movimientoTaxi[2], movimientoTaxi[4])
@@ -116,7 +117,6 @@ def enviarMensajeCustomer(codigoMensaje, customerID, mensaje):
     message = {'codigoMensaje': codigoMensaje, 'customerID': customerID, 'mensaje': mensaje}
     producerCustomer.send(topic, value=message)
     producerCustomer.flush()
-    print("ENVIADO mensaje a customer: " + codigoMensaje + ", " + customerID + ", " + mensaje)
 
 def recibirMensajeTaxi():
     consumer = KafkaConsumer(

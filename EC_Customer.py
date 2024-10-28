@@ -40,8 +40,6 @@ def recibirMensajesDeCentral():
                     info = message.value
                     codigoMensaje = info['codigoMensaje']
 
-                    print("Mensaje recibido: " + str(info['codigoMensaje']) + ", " + str(info['customerID']) + ", " + str(info['mensaje']))
-
                     if codigoMensaje == '1':
                         if numeroIdentificacion == str(info['mensaje']):
                             id_customer = str(info['customerID'])
@@ -57,6 +55,7 @@ def recibirMensajesDeCentral():
 
                             elif str(info['mensaje']) == "FINALIZADO":
                                 print("Aparcao, hasta la proxima")
+                                exit()
 
     except Exception as e:
         print(f"Error al recibir la orden del servicio: {e}")
