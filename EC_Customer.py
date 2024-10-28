@@ -49,12 +49,14 @@ def recibirMensajesDeCentral():
                     elif codigoMensaje == '2':
                         if id_customer == str(info['customerID']):
                             consumer.commit({topic_partition: OffsetAndMetadata(message.offset + 1, None)})
-
+                            
                             if str(info['mensaje']) == "RECOGER":
-                                print("El taxi va a por ti")
+                                print("El taxi está en camino")
+                                messagebox.showinfo("Solicitud procesada","El taxi está en camino.")
 
                             elif str(info['mensaje']) == "FINALIZADO":
                                 print("Aparcao, hasta la proxima")
+                                messagebox.showinfo("Éxito", "El taxi ha llegado a su destino.")
                                 exit()
 
     except Exception as e:
@@ -98,16 +100,22 @@ def procesar_formulario():
     ubicacion_y = entrada_ubicacion_y.get()
     destino_x = entrada_destino_x.get()
     destino_y = entrada_destino_y.get()
-    
-    # Convertir ubicación y destino en tuplas (x, y)
-    ubicacion = (int(ubicacion_x), int(ubicacion_y))
-    destino = (int(destino_x), int(destino_y))
+
     
     # Validar que los campos no estén vacíos
     if not cliente_nombre or not ubicacion_x or not ubicacion_y or not destino_x or not destino_y:
         messagebox.showerror("Error", "Por favor, complete todos los campos.")
         return
+
     
+        # Convertir ubicación y destino en tuplas (x, y)
+    ubicacion = (int(ubicacion_x), int(ubicacion_y))
+    destino = (int(destino_x), int(destino_y))
+
+    if (ubicacion[0] or destino[0]) > 20 or (ubicacion[1] or destino[1]) > 20:
+        messagebox.showerror("Error", "Por favor, no todos los campos son correctos.")
+        return
+
     # Llamar a la función enviar_solicitud_taxi con los datos
     enviar_solicitud_taxi(cliente_nombre, ubicacion, destino)
     
