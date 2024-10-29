@@ -4,8 +4,11 @@
 
 @KAFKA: Comunicaciones que había hecho con sockets y que han de ser cambiados por KAFKA
 
-Para ejecutar KAFKA en el ordenador:
+Para ejecutar KAFKA en el ordenador en Windows:
 
-%KAFKA_HOME%\bin\windows\zookeeper-server-start.bat %KAFKA_HOME%\config\zookeeper.properties
+.\bin\windows\zookeeper-server-start.bat .\config\zookeeper.properties
+.\bin\windows\kafka-server-start.bat .\config\server.properties
 
-%KAFKA_HOME%\bin\windows\kafka-server-start.bat %KAFKA_HOME%\config\server.properties
+Para ejecutar KAFKA en el ordenador en Ubuntu:
+$ bin/zookeeper-server-start.sh config/zookeeper.properties
+$ bin/kafka-server-start.sh config/server.properties
