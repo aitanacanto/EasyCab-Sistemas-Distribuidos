@@ -90,56 +90,24 @@ def mensajeriaConCentral():
 
 
 # Función para enviar la solicitud de taxi
-def enviar_solicitud_taxi(cliente_nombre, ubicacion, destino):
+def enviar_solicitud_taxi(cliente_nombre, ubicacion, destino, codigo):
     global numeroIdentificacion
-
-    ubicacion_x = ubicacion[0]
-    ubicacion_y = ubicacion[1]
-    destino_x = destino[0]
-    destino_y = destino[1]
     numero_aleatorio = str(random.randint(1, 10000))
     numeroIdentificacion = numero_aleatorio
 
     solicitud = {
         "numero_identificacion": numero_aleatorio,
         "cliente_nombre": cliente_nombre,
-        "ubicacion_x": ubicacion_x,
-        "ubicacion_y": ubicacion_y,
-        "destino_x": destino_x,
-        "destino_y": destino_y
+        "ubicacion": ubicacion,
+        "destinos" : destino,
+        "codigo"    : codigo
     }
     
     producer.send('solicitud_taxi', solicitud)
     print(f"Solicitud enviada, en breves su taxi pasara a por usted, ", cliente_nombre,".")
     producer.flush()
 
-def enviar_solicitud_taxi_lista(cliente_nombre, ubicacion, lista_destinos):
-    global numeroIdentificacion
-    global ubicacion_taxi
 
-    ubicacion_x = ubicacion[0]
-    ubicacion_y = ubicacion[1]
-    numero_aleatorio = str(random.randint(1, 10000))
-    numeroIdentificacion = numero_aleatorio
-
-    for destino in lista_destinos:
-        solicitud = {
-            "numero_identificacion": numero_aleatorio,
-            "cliente_nombre": cliente_nombre,
-            "ubicacion_x": ubicacion_x,
-            "ubicacion_y": ubicacion_y,
-            "destino_letra": destino
-        }
-        
-        producer.send('solicitud_taxi_lista', solicitud)
-        print(f"Solicitud enviada, en breves su taxi pasara a por usted, ", cliente_nombre,".")
-        producer.flush()
-
-        while not recibirMensajesDeCentral():
-            time.sleep(0.1)
-        
-        time.sleep(4)
-        ubicacion_x, ubicacion_y = ubicacion_taxi
 
 
 def obtener_lista_destinos(ruta_archivo):
@@ -185,9 +153,7 @@ def procesar_formulario(lista_destinos):
             messagebox.showerror("Error", "Por favor, no todos los campos son correctos.")
             return
         
-        enviar_solicitud_taxi(cliente_nombre, ubicacion, destino)
-
-        print("HOLIII")
+        enviar_solicitud_taxi(cliente_nombre, ubicacion, destino, '1')
 
     else:
     
@@ -195,7 +161,7 @@ def procesar_formulario(lista_destinos):
             messagebox.showerror("Error", "Por favor, no todos los campos son correctos.")
             return
         
-        enviar_solicitud_taxi_lista(cliente_nombre, ubicacion, lista_destinos)
+        enviar_solicitud_taxi(cliente_nombre, ubicacion, lista_destinos, '2')
 
     
     

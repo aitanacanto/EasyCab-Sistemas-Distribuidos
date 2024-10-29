@@ -210,26 +210,26 @@ def conexionSensor():
 
 def movimiento(posX, posY, objetivo, mapa, letraUbicacion):
 
-    if   posY < objetivo[1] and posX < objetivo[0] and (mapa[posX+1][posY+1] == ' ' or mapa[posX+1][posY+1] == letraUbicacion):
+    if   posY < objetivo[1] and posX < objetivo[0] and (mapa[posX+1][posY+1] == ' ' or mapa[posX+1][posY+1] == letraUbicacion or (posX+1 == objetivo[0] and posY+1 == objetivo[1])):
         posX += 1
         posY += 1
-    elif posY > objetivo[1] and posX > objetivo[0] and (mapa[posX-1][posY-1] == ' ' or mapa[posX-1][posY-1] == letraUbicacion):
+    elif posY > objetivo[1] and posX > objetivo[0] and (mapa[posX-1][posY-1] == ' ' or mapa[posX-1][posY-1] == letraUbicacion or (posX-1 == objetivo[0] and posY-1 == objetivo[1])):
         posX -= 1
         posY -= 1
-    elif posY > objetivo[1] and posX < objetivo[0] and (mapa[posX+1][posY-1] == ' ' or mapa[posX+1][posY-1] == letraUbicacion):
+    elif posY > objetivo[1] and posX < objetivo[0] and (mapa[posX+1][posY-1] == ' ' or mapa[posX+1][posY-1] == letraUbicacion or (posX+1 == objetivo[0] and posY-1 == objetivo[1])):
         posX += 1
         posY -= 1
-    elif posY < objetivo[1] and posX > objetivo[0] and (mapa[posX-1][posY+1] == ' ' or mapa[posX-1][posY+1] == letraUbicacion):
+    elif posY < objetivo[1] and posX > objetivo[0] and (mapa[posX-1][posY+1] == ' ' or mapa[posX-1][posY+1] == letraUbicacion or (posX-1 == objetivo[0] and posY+1 == objetivo[1])):
         posX -= 1
         posY += 1
 
-    elif posX < objetivo[0] and (mapa[posX+1][posY] == ' ' or mapa[posX+1][posY] == letraUbicacion):
+    elif posX < objetivo[0] and (mapa[posX+1][posY] == ' ' or mapa[posX+1][posY] == letraUbicacion or (posX+1 == objetivo[0] and posY == objetivo[1])):
         posX += 1
-    elif posX > objetivo[0] and (mapa[posX-1][posY] == ' ' or mapa[posX-1][posY] == letraUbicacion):
+    elif posX > objetivo[0] and (mapa[posX-1][posY] == ' ' or mapa[posX-1][posY] == letraUbicacion or (posX-1 == objetivo[0] and posY == objetivo[1])):
         posX -= 1
-    elif posY < objetivo[1] and (mapa[posX][posY+1] == ' ' or mapa[posX][posY+1] == letraUbicacion):
+    elif posY < objetivo[1] and (mapa[posX][posY+1] == ' ' or mapa[posX][posY+1] == letraUbicacion or (posX == objetivo[0] and posY+1 == objetivo[1])):
         posY += 1
-    elif posY > objetivo[1] and (mapa[posX][posY-1] == ' ' or mapa[posX][posY-1] == letraUbicacion):
+    elif posY > objetivo[1] and (mapa[posX][posY-1] == ' ' or mapa[posX][posY-1] == letraUbicacion or (posX == objetivo[0] and posY-1 == objetivo[1])):
         posY -= 1
 
     else:

@@ -36,6 +36,7 @@ PUERTO_GESTOR = int(argumentos[3])
 
 ARCHIVO_MAPA = 'mapa.txt'
 ARCHIVO_TAXI = 'taxi.txt'
+ARCHIVO_DESTINOS = 'EC_locations.json'
 SERVER = socket.gethostbyname(socket.gethostname())
 DIRECCION = (SERVER, PUERTO_ESCUCHA)
 
@@ -68,18 +69,37 @@ def conexionKafka():
 
         if peticiones:
             for peticion in peticiones:
-                taxi = hayTaxisDisponibles(peticion[1], peticion[2])
+                if not isinstance(peticion[3], list):
+                    taxi = hayTaxisDisponibles(peticion[1], peticion[2])
 
-                if taxi is not None:
-                    customerXtaxis.append((peticion[0], taxi[0]))
-                    peticionesXtaxis.append((peticion,taxi[0]))
-                    cambiarEstadoTaxiFichero(taxi[0], "NO")
-                    meterEnMapa(peticion[1], peticion[2], peticion[0])
-                    meterEnMapa(peticion[3], peticion[4], peticion[0].upper())
-                    enviarMensajeTaxiMapa()
-                    enviarMensajeTaxiOrden(taxi[0], (peticion[1], peticion[2]), (peticion[3], peticion[4]), peticion[0].upper())
+                    if taxi is not None:
+                        customerXtaxis.append((peticion[0], taxi[0]))
+                        peticionesXtaxis.append((peticion,taxi[0]))
+                        cambiarEstadoTaxiFichero(taxi[0], "NO")
+                        meterEnMapa(peticion[1], peticion[2], peticion[0])
+                        enviarMensajeTaxiMapa()
+                        enviarMensajeTaxiOrden(taxi[0], (peticion[1], peticion[2]), (peticion[3], peticion[4]), peticion[0].upper())
+                    else:
+                        listaEsperaClientes.append(peticion)
+
                 else:
-                    listaEsperaClientes.append(peticion)
+                    taxi = hayTaxisDisponibles(peticion[1], peticion[2])
+                    origen_x = peticion[1]
+                    origen_y = peticion[2]
+
+                    if taxi is not None:
+                        for tupla in peticion[3]:
+                            customerXtaxis.append((peticion[0], taxi[0]))
+                            peticionesXtaxis.append((peticion,taxi[0]))
+                            cambiarEstadoTaxiFichero(taxi[0], "NO")
+                            meterEnMapa(peticion[1], peticion[2], peticion[0])
+                            enviarMensajeTaxiMapa()
+                            enviarMensajeTaxiOrden(taxi[0], (origen_x, origen_y), (tupla[1], tupla[2]), tupla[0].upper())
+                            origen_x = tupla[1]
+                            origen_y = tupla[2]
+                    else:
+                        listaEsperaClientes.append(peticion)
+                
 
         movimientosTaxi = recibirMensajeTaxi()
         
@@ -162,6 +182,31 @@ def recibirMensajeTaxi():
 
     return None
 
+def obtener_lista_ubicaciones(ruta_archivo, lista_letras):
+    lista_ubicaciones = []
+    
+    try:
+        with open(ruta_archivo, 'r') as archivo:
+            datos = json.load(archivo)
+            
+            for location in datos["locations"]:
+                letra = location["Id"]
+                x, y = map(int, location["POS"].split(","))
+                lista_ubicaciones.append((letra, x, y))
+                
+    except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
+        print("Error al leer el archivo:", e)
+
+    solucion = []
+
+    for letra in lista_letras:
+        for destino in lista_ubicaciones:
+            if letra == destino[0]:
+                solucion.append(destino)
+                meterEnMapa(destino[1], destino[2], destino[0])
+
+    return solucion
+
 def recibirPeticionesCustomers():
     consumer = KafkaConsumer(
         'solicitud_taxi',
@@ -191,15 +236,35 @@ def recibirPeticionesCustomers():
                         consumer.commit({topic_partition: OffsetAndMetadata(record.offset + 1, None)})
                         numero_identificacion = info['numero_identificacion']
 
-                        enviarMensajeCustomer('1', customer_id, str(numero_identificacion))
+                        if info['codigo'] == '1':
 
-                        ubicacion_x = info['ubicacion_x']
-                        ubicacion_y = info['ubicacion_y']
-                        destino_x = info['destino_x']
-                        destino_y = info['destino_y']
-                        peticion = (customer_id, ubicacion_x, ubicacion_y, destino_x, destino_y)
-                        peticiones.append(peticion)
-                        print("Recibido mensaje de Customer")
+                            enviarMensajeCustomer('1', customer_id, str(numero_identificacion))
+
+                            ubicacion = info['ubicacion']
+                            ubicacion_x = ubicacion[0]
+                            ubicacion_y = ubicacion[1]
+
+                            destino = info['destino']
+                            destino_x = destino[0]
+                            destino_y = destino[1]
+
+                            peticion = (customer_id, ubicacion_x, ubicacion_y, destino_x, destino_y)
+                            meterEnMapa(destino_x, destino_y, customer_id.upper())
+                            peticiones.append(peticion)
+                            print("Recibido mensaje de Customer")
+
+                        elif info['codigo'] == '2':
+
+                            enviarMensajeCustomer('1', customer_id, str(numero_identificacion))
+                
+                            ubicacion = info['ubicacion']
+                            ubicacion_x = ubicacion[0]
+                            ubicacion_y = ubicacion[1]
+
+                            array_destinos = obtener_lista_ubicaciones(ARCHIVO_DESTINOS, info['destinos'])
+                            peticion = (customer_id, ubicacion_x, ubicacion_y, array_destinos)
+                            peticiones.append(peticion)
+                            print("Recibido mensaje de Customer")
                     else:
                         print("No hay IDs de clientes disponibles.")
                         return None
