@@ -11,6 +11,7 @@ import random
 
 global numeroIdentificacion
 global id_customer
+id_customer = ''
 ANCHO = 20
 ALTO = 20
 
