@@ -404,6 +404,7 @@ def cambiarEstadoTaxiFichero(id_taxi, operativo):
                 taxi_id = datos[2]
                 taxi_x = datos[3]
                 taxi_y = datos[4]
+                #Aitana ha hecho esto
 
                 if taxi_id == id_taxi:
                     taxiEncontrado = True
