@@ -37,8 +37,7 @@ PUERTO_GESTOR = int(argumentos[3])
 ARCHIVO_MAPA = 'mapa.txt'
 ARCHIVO_TAXI = 'taxi.txt'
 ARCHIVO_DESTINOS = 'EC_locations.json'
-SERVER = socket.gethostbyname(socket.gethostname())
-DIRECCION = (SERVER, PUERTO_ESCUCHA)
+DIRECCION = (IP_GESTOR, PUERTO_ESCUCHA)
 
 global mapa
 global listaEsperaClientes
@@ -354,10 +353,15 @@ def startTaxi(server):
             conn.close()
 
 def conexionTaxi():
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind(DIRECCION)
-    print(DIRECCION)
-    startTaxi(server)
+    try:
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.bind(DIRECCION)
+        print(DIRECCION)
+        startTaxi(server)
+
+    except Exception as e:
+        print("EXCEPCION ---> Dirección incorrecta.")
+
 
 ###################### MAPA ######################
 
