@@ -62,20 +62,21 @@ def recibirMensajesDeCentral():
                             print("ID asignado al Customer")
                             consumer.commit({topic_partition: OffsetAndMetadata(message.offset + 1, None)})
 
-                    elif codigoMensaje == '2':
-                        if id_customer == str(info['customerID']):
-                            consumer.commit({topic_partition: OffsetAndMetadata(message.offset + 1, None)})
-                            
-                            if str(info['mensaje']) == "RECOGER":
-                                print("El taxi está en camino")
-                                messagebox.showinfo("Solicitud procesada","El taxi está en camino.")
-                                return False
+                    elif id_customer:
+                        if codigoMensaje == '2':
+                            if id_customer == str(info['customerID']):
+                                consumer.commit({topic_partition: OffsetAndMetadata(message.offset + 1, None)})
+                                
+                                if str(info['mensaje']) == "RECOGER":
+                                    print("El taxi está en camino")
+                                    messagebox.showinfo("Solicitud procesada","El taxi está en camino.")
+                                    return False
 
-                            elif str(info['mensaje']) == "FINALIZADO":
-                                print("Aparcao, hasta la proxima")
-                                messagebox.showinfo("Éxito", "El taxi ha llegado a su destino.")
-                                ubicacion_taxi = info['ubicacion_taxi']
-                                return True
+                                elif str(info['mensaje']) == "FINALIZADO":
+                                    print("Aparcao, hasta la proxima")
+                                    messagebox.showinfo("Éxito", "El taxi ha llegado a su destino.")
+                                    ubicacion_taxi = info['ubicacion_taxi']
+                                    return True
 
     except Exception as e:
         print(f"Error al recibir la orden del servicio: {e}")
@@ -90,16 +91,13 @@ def mensajeriaConCentral():
 # Función para enviar la solicitud de taxi
 def enviar_solicitud_taxi(cliente_nombre, ubicacion, destino):
     global numeroIdentificacion
-    global id_customer
 
     ubicacion_x = ubicacion[0]
     ubicacion_y = ubicacion[1]
     destino_x = destino[0]
     destino_y = destino[1]
     numero_aleatorio = str(random.randint(1, 10000))
-
-    if not id_customer:
-        numeroIdentificacion = numero_aleatorio
+    numeroIdentificacion = numero_aleatorio
 
     solicitud = {
         "numero_identificacion": numero_aleatorio,
@@ -181,13 +179,14 @@ def procesar_formulario(lista_destinos):
             return
         
         destino = (int(destino_x), int(destino_y))
-        lista_destinos.append(destino)
 
         if (destino[0] or ubicacion[0]) > ANCHO or (destino[1] or ubicacion[1]) > ALTO:
             messagebox.showerror("Error", "Por favor, no todos los campos son correctos.")
             return
         
         enviar_solicitud_taxi(cliente_nombre, ubicacion, destino)
+
+        print("HOLIII")
 
     else:
     

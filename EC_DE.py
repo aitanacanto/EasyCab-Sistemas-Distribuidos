@@ -81,6 +81,7 @@ def realizarViaje():
             while not recibirActualizacionMapa() and not stop_event.is_set():
                 time.sleep(0.1)
         else:
+            antiguaPosicion = ubicacion
             enviarPosicionTaxi(ID_TAXI, ubicacion, antiguaPosicion, False, KO)
 
         time.sleep(2)
@@ -132,6 +133,7 @@ def recibirPosicionCliente():
         for topic_partition, msgs in messages.items():
             for message in msgs:
                 info = message.value
+                print("Mensaje recibido con ID: " + info['taxi_id'])
                 taxi_id = info['taxi_id']
                 if taxi_id == ID_TAXI:
                     cliente = info['posCliente']
@@ -168,10 +170,10 @@ def conexionSensor():
 
     timeout_seconds = 5
     last_message_time = time.time()
+    conexion.settimeout(timeout_seconds)
 
     while not stop_event.is_set():  # Revisa stop_event
         try:
-            conexion.settimeout(timeout_seconds)
             mensaje = conexion.recv(4096).decode()
             if mensaje == OK:
                 permisoMovimiento = True

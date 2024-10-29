@@ -6,6 +6,9 @@ import time
 from kafka import KafkaProducer, KafkaConsumer, OffsetAndMetadata
 import json
 import mapaPygame
+from threading import Lock
+
+lock = threading.Lock()
 
 
 ############ COSAS A MEJORARA ############
@@ -70,7 +73,7 @@ def conexionKafka():
                 if taxi is not None:
                     customerXtaxis.append((peticion[0], taxi[0]))
                     peticionesXtaxis.append((peticion,taxi[0]))
-                    cambiarEstadoTaxiFichero(peticion[0], "NO")
+                    cambiarEstadoTaxiFichero(taxi[0], "NO")
                     meterEnMapa(peticion[1], peticion[2], peticion[0])
                     meterEnMapa(peticion[3], peticion[4], peticion[0].upper())
                     enviarMensajeTaxiMapa()
@@ -110,6 +113,7 @@ def enviarMensajeTaxiOrden(taxi_id, cliente, destino, letraDestino):
     message = {'taxi_id': taxi_id, 'posCliente': cliente, 'posDestino': destino, 'letraDestino': letraDestino}
     producerTaxi.send(topic, value=message)
     producerTaxi.flush()
+    print("Enviado orden de viaje al Taxi " + str(taxi_id))
 
 def enviarMensajeCustomer(codigoMensaje, customerID, mensaje):
     producerCustomer = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
@@ -195,6 +199,7 @@ def recibirPeticionesCustomers():
                         destino_y = info['destino_y']
                         peticion = (customer_id, ubicacion_x, ubicacion_y, destino_x, destino_y)
                         peticiones.append(peticion)
+                        print("Recibido mensaje de Customer")
                     else:
                         print("No hay IDs de clientes disponibles.")
                         return None
@@ -221,40 +226,6 @@ def liberar_id_cliente(customer_id):
             CUSTOMERS_ACTIVOS[i] = (letra, False) 
 
 ################## SOCKET TAXI ##################
-
-def cambiarEstadoTaxiFichero(id_taxi, operativo):
-    taxiEncontrado = False
-    nuevasLineas = []
-    
-    try:
-        with open(ARCHIVO_TAXI, 'r') as archivo:
-            lineas = archivo.readlines()
-
-        for linea in lineas:
-            datos = linea.strip().replace('<', '').split('>')
-            taxi_asignado = datos[0]
-            taxi_id = datos[2]
-            taxi_x = datos[3]
-            taxi_y = datos[4]
-
-            if taxi_id == id_taxi:
-                taxiEncontrado = True
-                nuevaLinea = f"<{taxi_asignado}><{operativo}><{taxi_id}><{taxi_x}><{taxi_y}>"
-                nuevasLineas.append(nuevaLinea)
-            else:
-                taxiEncontrado = False
-                nuevasLineas.append(linea)
-        
-        with open(ARCHIVO_TAXI, 'w') as archivo:
-            archivo.writelines(nuevasLineas)
-
-        if not taxiEncontrado:
-            return False
-        else:
-            return True
-
-    except Exception as e:
-        print(f"EXCEPCIÓN ---> No se ha podido comunicar con la base de datos del taxi: {e}")
 
 def validarUbicacion(id_taxi, conn):
     taxiEncontrado = False
@@ -353,56 +324,92 @@ def cambiarPosicionTaxiMapa(taxi_id, taxi_posicion, antigua_posicion, estado_sen
 
 ################## BASE DE DATOS ##################
 
-def actualizarPosicionTaxiFichero(id_taxi, posicion, finalizado, estadoSensor):
-    nuevo_x, nuevo_y = posicion
-    
-    try:
-        with open(ARCHIVO_TAXI, 'r') as archivo:
-            lineas = archivo.readlines()
-    except Exception as e:
-        print(f"Error al leer el archivo de taxis: {e}")
-        return
-    
-    taxiActualizado = False
-    nuevasLineas = []
+def cambiarEstadoTaxiFichero(id_taxi, operativo):
+    with lock:
+        taxiEncontrado = False
+        nuevasLineas = []
+        
+        try:
+            with open(ARCHIVO_TAXI, 'r') as archivo:
+                lineas = archivo.readlines()
 
-    # Procesar cada línea y actualizar la información del taxi si es necesario
-    for linea in lineas:
-        datos = linea.strip().replace('<', '').split('>')
+            for linea in lineas:
+                datos = linea.strip().replace('<', '').split('>')
+                taxi_asignado = datos[0]
+                taxi_id = datos[2]
+                taxi_x = datos[3]
+                taxi_y = datos[4]
 
-        # Verificar que la línea tenga al menos 5 elementos
-        if len(datos) >= 5:
-            taxi_id = datos[2]
-            if taxi_id == str(id_taxi):
-                taxi_x = str(nuevo_x)
-                taxi_y = str(nuevo_y)
-                taxiActualizado = True
-
-                if finalizado:
-                    nueva_linea = f"<SI><SI><{taxi_id}><{taxi_x}><{taxi_y}>\n"
-                elif estadoSensor == FIN:
-                    nueva_linea = f"<NO><NO><{taxi_id}><{taxi_x}><{taxi_y}>\n"
+                if taxi_id == id_taxi:
+                    taxiEncontrado = True
+                    nuevaLinea = f"<{taxi_asignado}><{operativo}><{taxi_id}><{taxi_x}><{taxi_y}>\n"
+                    nuevasLineas.append(nuevaLinea)
                 else:
-                    nueva_linea = f"<SI><NO><{taxi_id}><{taxi_x}><{taxi_y}>\n"
+                    nuevasLineas.append(linea)
+            
+            with open(ARCHIVO_TAXI, 'w') as archivo:
+                archivo.writelines(nuevasLineas)
 
-                nuevasLineas.append(nueva_linea)
+            if not taxiEncontrado:
+                print("No se ha podido cambiar el estado al taxi: " + id_taxi)
+                return False
             else:
+                return True
+
+        except Exception as e:
+            print(f"EXCEPCIÓN ---> No se ha podido comunicar con la base de datos del taxi: {e}")
+
+def actualizarPosicionTaxiFichero(id_taxi, posicion, finalizado, estadoSensor):
+    with lock:
+        nuevo_x, nuevo_y = posicion
+        
+        try:
+            with open(ARCHIVO_TAXI, 'r') as archivo:
+                lineas = archivo.readlines()
+        except Exception as e:
+            print(f"Error al leer el archivo de taxis: {e}")
+            return
+        
+        taxiActualizado = False
+        nuevasLineas = []
+
+        # Procesar cada línea y actualizar la información del taxi si es necesario
+        for linea in lineas:
+            datos = linea.strip().replace('<', '').split('>')
+
+            # Verificar que la línea tenga al menos 5 elementos
+            if len(datos) >= 5:
+                taxi_id = datos[2]
+                if taxi_id == str(id_taxi):
+                    taxi_x = str(nuevo_x)
+                    taxi_y = str(nuevo_y)
+                    taxiActualizado = True
+
+                    if finalizado:
+                        nueva_linea = f"<SI><SI><{taxi_id}><{taxi_x}><{taxi_y}>\n"
+                    elif estadoSensor == FIN:
+                        nueva_linea = f"<NO><NO><{taxi_id}><{taxi_x}><{taxi_y}>\n"
+                    else:
+                        nueva_linea = f"<SI><NO><{taxi_id}><{taxi_x}><{taxi_y}>\n"
+
+                    nuevasLineas.append(nueva_linea)
+                else:
+                    nuevasLineas.append(linea)
+            else:
+                # Línea no válida, agregar advertencia opcionalmente
+                print(f"Advertencia: línea inválida detectada: {linea.strip()}")
                 nuevasLineas.append(linea)
-        else:
-            # Línea no válida, agregar advertencia opcionalmente
-            print(f"Advertencia: línea inválida detectada: {linea.strip()}")
-            nuevasLineas.append(linea)
 
-    if not taxiActualizado:
-        print(f"No se encontró el taxi con ID {id_taxi} para actualizar.")
+        if not taxiActualizado:
+            print(f"No se encontró el taxi con ID {id_taxi} para actualizar.")
 
-    try:
-        with open(ARCHIVO_TAXI, 'w') as archivo:
-            archivo.writelines(nuevasLineas)
-    except Exception as e:
-        print(f"Error al actualizar la posición del taxi en el fichero: {e}")
+        try:
+            with open(ARCHIVO_TAXI, 'w') as archivo:
+                archivo.writelines(nuevasLineas)
+        except Exception as e:
+            print(f"Error al actualizar la posición del taxi en el fichero: {e}")
 
-    time.sleep(0.1)
+        time.sleep(0.1)
 
 def hayTaxisDisponibles(cliente_x, cliente_y):
     with open(ARCHIVO_TAXI, 'r') as archivo:
@@ -431,10 +438,7 @@ def hayTaxisDisponibles(cliente_x, cliente_y):
                     minDistancia = distancia
                     taxiMasCercano = (taxi_id, taxi_x, taxi_y)
 
-    if taxiMasCercano:
-        return taxiMasCercano
-    else:
-        return None
+    return taxiMasCercano
 
 def meterTaxisBaseDatos(arrayPos):
     arrayTaxis = []
