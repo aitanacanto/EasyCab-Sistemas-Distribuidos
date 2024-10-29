@@ -98,7 +98,7 @@ def recibirActualizacionMapa():
 
     consumer = KafkaConsumer(
         'actualizar_mapa',
-        bootstrap_servers='localhost:9092',
+        bootstrap_servers=[f"{IP_GESTOR}:{PUERTO_GESTOR}"],
         value_deserializer=lambda v: json.loads(v.decode('utf-8')),
         auto_offset_reset='latest',
     )
@@ -117,7 +117,7 @@ def recibirPosicionCliente():
 
     consumer = KafkaConsumer(
         'procesar_viaje',
-        bootstrap_servers='localhost:9092',
+        bootstrap_servers=[f"{IP_GESTOR}:{PUERTO_GESTOR}"],
         value_deserializer=lambda v: json.loads(v.decode('utf-8')),
         auto_offset_reset='earliest',
         enable_auto_commit=False,
@@ -149,7 +149,7 @@ def recibirPosicionCliente():
     return False
 
 def enviarPosicionTaxi(taxi_id, posicion, antiguaPosicion, finalizado, estadoSensor):
-    producerTAXI = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
+    producerTAXI = KafkaProducer(bootstrap_servers=[f"{IP_GESTOR}:{PUERTO_GESTOR}"],value_serializer=lambda v: json.dumps(v).encode('utf-8'))
     topic = 'actualizaciones_taxi'
     message = {'taxi_id': taxi_id, 'taxi_posicion': posicion, 'viaje_finalizado': finalizado, 'antigua_posicion': antiguaPosicion, 'estado_sensor': estadoSensor}
     producerTAXI.send(topic, message)
