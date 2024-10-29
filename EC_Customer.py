@@ -2,6 +2,8 @@ import tkinter as tk
 from tkinter import messagebox
 from kafka import KafkaProducer, KafkaConsumer, OffsetAndMetadata
 import json
+import time
+import sys
 import traceback
 import threading
 import random
@@ -9,6 +11,19 @@ import random
 
 global numeroIdentificacion
 global id_customer
+ANCHO = 20
+ALTO = 20
+
+# Función para procesar argumentos
+if len(sys.argv) != 2:
+    print("ERROR: Número de argumentos incorrecto")    
+    print("Formato correcto -> python3 EC_Customer.py <op>\n")
+    print("OP: <-f> -> Formulario / <nombre.json> -> Fichero destinos")
+    exit()
+
+argumentos = sys.argv
+OPCION = str(argumentos[1])
+global ubicacion_taxi
 
 # Función para serializar el mensaje a JSON
 def json_serializer(data):
@@ -21,6 +36,7 @@ producer = KafkaProducer(bootstrap_servers=['localhost:9092'],
 def recibirMensajesDeCentral():
     global id_customer
     global numeroIdentificacion
+    global ubicacion_taxi
 
     consumer = KafkaConsumer(
         'mensajes_a_consumer',
@@ -53,15 +69,18 @@ def recibirMensajesDeCentral():
                             if str(info['mensaje']) == "RECOGER":
                                 print("El taxi está en camino")
                                 messagebox.showinfo("Solicitud procesada","El taxi está en camino.")
+                                return False
 
                             elif str(info['mensaje']) == "FINALIZADO":
                                 print("Aparcao, hasta la proxima")
                                 messagebox.showinfo("Éxito", "El taxi ha llegado a su destino.")
-                                exit()
+                                ubicacion_taxi = info['ubicacion_taxi']
+                                return True
 
     except Exception as e:
         print(f"Error al recibir la orden del servicio: {e}")
         traceback.print_exc()
+    return False
 
 def mensajeriaConCentral():
     while True:
@@ -71,6 +90,7 @@ def mensajeriaConCentral():
 # Función para enviar la solicitud de taxi
 def enviar_solicitud_taxi(cliente_nombre, ubicacion, destino):
     global numeroIdentificacion
+    global id_customer
 
     ubicacion_x = ubicacion[0]
     ubicacion_y = ubicacion[1]
@@ -78,7 +98,8 @@ def enviar_solicitud_taxi(cliente_nombre, ubicacion, destino):
     destino_y = destino[1]
     numero_aleatorio = str(random.randint(1, 10000))
 
-    numeroIdentificacion = numero_aleatorio
+    if not id_customer:
+        numeroIdentificacion = numero_aleatorio
 
     solicitud = {
         "numero_identificacion": numero_aleatorio,
@@ -92,32 +113,91 @@ def enviar_solicitud_taxi(cliente_nombre, ubicacion, destino):
     producer.send('solicitud_taxi', solicitud)
     print(f"Solicitud enviada, en breves su taxi pasara a por usted, ", cliente_nombre,".")
     producer.flush()
+
+def enviar_solicitud_taxi_lista(cliente_nombre, ubicacion, lista_destinos):
+    global numeroIdentificacion
+    global ubicacion_taxi
+
+    ubicacion_x = ubicacion[0]
+    ubicacion_y = ubicacion[1]
+    numero_aleatorio = str(random.randint(1, 10000))
+    numeroIdentificacion = numero_aleatorio
+
+    for destino in lista_destinos:
+        solicitud = {
+            "numero_identificacion": numero_aleatorio,
+            "cliente_nombre": cliente_nombre,
+            "ubicacion_x": ubicacion_x,
+            "ubicacion_y": ubicacion_y,
+            "destino_letra": destino
+        }
+        
+        producer.send('solicitud_taxi_lista', solicitud)
+        print(f"Solicitud enviada, en breves su taxi pasara a por usted, ", cliente_nombre,".")
+        producer.flush()
+
+        while not recibirMensajesDeCentral():
+            time.sleep(0.1)
+        
+        time.sleep(4)
+        ubicacion_x, ubicacion_y = ubicacion_taxi
+
+
+def obtener_lista_destinos(ruta_archivo):
+    try:
+        with open(ruta_archivo, 'r') as archivo:
+            datos = json.load(archivo)  # Cargar el JSON
+            lista_destinos = [request["Id"] for request in datos["Requests"]]
+        return lista_destinos
+    
+    except (FileNotFoundError, json.JSONDecodeError, KeyError):
+        messagebox.showerror("Error", "No se pudo leer el archivo pasado por parámetro")
+    except Exception as e:
+        print(f"Ocurrió un error inesperado: {e}")
+        messagebox.showerror("Error", "No se pudo leer el archivo pasado por parámetro")
+
+    ventana.destroy()
+    return []
+
     
 # Función para procesar los datos del formulario
-def procesar_formulario():
+def procesar_formulario(lista_destinos):
     cliente_nombre = etiqueta_cliente_nombre.get()
     ubicacion_x = entrada_ubicacion_x.get()
     ubicacion_y = entrada_ubicacion_y.get()
-    destino_x = entrada_destino_x.get()
-    destino_y = entrada_destino_y.get()
 
-    
-    # Validar que los campos no estén vacíos
-    if not cliente_nombre or not ubicacion_x or not ubicacion_y or not destino_x or not destino_y:
+    if not cliente_nombre or not ubicacion_x or not ubicacion_y:
         messagebox.showerror("Error", "Por favor, complete todos los campos.")
         return
+    
+    ubicacion = (int(ubicacion_x), int(ubicacion_y))
+
+    if OPCION == "-f":
+        destino_x = entrada_destino_x.get()
+        destino_y = entrada_destino_y.get()
+
+        if not destino_x or not destino_y:
+            messagebox.showerror("Error", "Por favor, complete todos los campos.")
+            return
+        
+        destino = (int(destino_x), int(destino_y))
+        lista_destinos.append(destino)
+
+        if (destino[0] or ubicacion[0]) > ANCHO or (destino[1] or ubicacion[1]) > ALTO:
+            messagebox.showerror("Error", "Por favor, no todos los campos son correctos.")
+            return
+        
+        enviar_solicitud_taxi(cliente_nombre, ubicacion, destino)
+
+    else:
+    
+        if ubicacion[0] > ANCHO or ubicacion[1] > ALTO:
+            messagebox.showerror("Error", "Por favor, no todos los campos son correctos.")
+            return
+        
+        enviar_solicitud_taxi_lista(cliente_nombre, ubicacion, lista_destinos)
 
     
-        # Convertir ubicación y destino en tuplas (x, y)
-    ubicacion = (int(ubicacion_x), int(ubicacion_y))
-    destino = (int(destino_x), int(destino_y))
-
-    if (ubicacion[0] or destino[0]) > 20 or (ubicacion[1] or destino[1]) > 20:
-        messagebox.showerror("Error", "Por favor, no todos los campos son correctos.")
-        return
-
-    # Llamar a la función enviar_solicitud_taxi con los datos
-    enviar_solicitud_taxi(cliente_nombre, ubicacion, destino)
     
     # Mostrar mensaje de éxito
     messagebox.showinfo("Éxito", "Solicitud de taxi enviada con éxito!")
@@ -144,17 +224,27 @@ entrada_ubicacion_x.grid(row=1, column=1)
 entrada_ubicacion_y = tk.Entry(ventana, width=5)
 entrada_ubicacion_y.grid(row=1, column=2)
 
-# Etiquetas y campos de entrada para el destino (x, y)
-etiqueta_destino = tk.Label(ventana, text="Destino (x, y):")
-etiqueta_destino.grid(row=2, column=0)
-entrada_destino_x = tk.Entry(ventana, width=5)
-entrada_destino_x.grid(row=2, column=1)
-entrada_destino_y = tk.Entry(ventana, width=5)
-entrada_destino_y.grid(row=2, column=2)
+if OPCION == "-f" :
+
+    # Etiquetas y campos de entrada para el destino (x, y)
+    etiqueta_destino = tk.Label(ventana, text="Destino (x, y):")
+    etiqueta_destino.grid(row=2, column=0)
+    entrada_destino_x = tk.Entry(ventana, width=5)
+    entrada_destino_x.grid(row=2, column=1)
+    entrada_destino_y = tk.Entry(ventana, width=5)
+    entrada_destino_y.grid(row=2, column=2)
+
+lista_destinos = []
+
+if OPCION != "-f" :
+    lista_destinos = obtener_lista_destinos(OPCION)
 
 # Botón para enviar la solicitud
-boton_enviar = tk.Button(ventana, text="Enviar Solicitud", command=procesar_formulario)
+boton_enviar = tk.Button(ventana, text="Enviar Solicitud", command=lambda: procesar_formulario(lista_destinos))
 boton_enviar.grid(row=3, columnspan=3)
+
+
+
 
 # Ejecutar la ventana principal
 ventana.mainloop()
