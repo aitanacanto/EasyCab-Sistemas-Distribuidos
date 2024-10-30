@@ -72,7 +72,7 @@ def realizarViaje():
                     clienteDentro = True
             else:
                 ubicacion = actualizarPosicion(cliente, destino, mapa)
-                if ubicacion[0] == destino[0] and ubicacion[1] == destino[1]:
+                if ubicacion[0] == destino[0] and ubicacion[1] == destino[1] and not recibirPosicionCliente():
                     enviarPosicionTaxi(ID_TAXI, ubicacion, antiguaPosicion, True, OK)
                     break
                 else:
