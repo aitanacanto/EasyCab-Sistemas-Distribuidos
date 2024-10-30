@@ -97,7 +97,7 @@ def conexionKafka():
                             origen_x = tupla[1]
                             origen_y = tupla[2]
                     else:
-                        listaEsperaClientes.append(peticion)
+                        listaEsperaClientes.append(peticion)                
 
         movimientosTaxi = recibirMensajeTaxi()
         
@@ -145,7 +145,7 @@ def recibirMensajeTaxi():
         'actualizaciones_taxi',
         bootstrap_servers='localhost:9092',
         value_deserializer=lambda v: json.loads(v.decode('utf-8')),
-        auto_offset_reset='earliest',  # Leer desde el principio si es necesario
+        auto_offset_reset='earliest',   # Leer desde el principio si es necesario
         enable_auto_commit=True,        # Permite confirmar automáticamente los offsets
         group_id='central_taxi_group'   # Asegurar que el grupo es el adecuado
     )
