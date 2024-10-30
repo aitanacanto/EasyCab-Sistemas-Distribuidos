@@ -101,6 +101,7 @@ def recibirActualizacionMapa():
         bootstrap_servers=[f"{IP_GESTOR}:{PUERTO_GESTOR}"],
         value_deserializer=lambda v: json.loads(v.decode('utf-8')),
         auto_offset_reset='latest',
+        enable_auto_commit=False  
     )
 
     for message in consumer:
