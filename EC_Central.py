@@ -98,7 +98,6 @@ def conexionKafka():
                             origen_y = tupla[2]
                     else:
                         listaEsperaClientes.append(peticion)
-                
 
         movimientosTaxi = recibirMensajeTaxi()
         
