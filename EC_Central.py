@@ -43,7 +43,6 @@ OK = "OK"
 
 def meterEnMapa(pos_x, pos_y, elemento):
     mapa[pos_x][pos_y] = elemento
-
 def conexionKafka():
     while True:
         peticion = recibirPeticionesCustomers()
@@ -66,7 +65,7 @@ def conexionKafka():
                 cambiarPosicionTaxiMapa(movimientoTaxi[0], movimientoTaxi[1])
                 actualizarPosicionTaxiFichero(movimientoTaxi[0], movimientoTaxi[1], movimientoTaxi[2])
                 enviarMensajeTaxiMapa()
-
+                
 def enviarMensajeTaxiMapa():
     global mapa
     producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
@@ -74,7 +73,6 @@ def enviarMensajeTaxiMapa():
     producerTaxi.flush()
     print("Mapa enviado exitosamente")
     
-
 def enviarMensajeTaxiOrden(taxi_id, cliente, destino):
     producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
     topic = 'procesar_viaje'
@@ -151,7 +149,6 @@ def recibirPeticionesCustomers():
         consumer.close()
 
     return None
-
 def asignar_id_cliente():
     for i, (letra, estado) in enumerate(CUSTOMERS_ACTIVOS):
         if not estado:
