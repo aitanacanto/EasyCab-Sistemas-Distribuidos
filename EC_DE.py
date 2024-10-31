@@ -6,6 +6,9 @@ from kafka import KafkaConsumer, KafkaProducer
 from kafka.structs import OffsetAndMetadata
 import json
 import traceback
+from threading import Lock
+
+lock = threading.Lock()
 
 # Argumentos y configuraciones
 if len(sys.argv) != 8:
@@ -45,6 +48,7 @@ mapa_lock = threading.Lock()
 ############ FUNCIONES #############
 
 def mostrarMapa(mapa):
+    """
     linea_horizontal = '-' * (ANCHO * 2 + 1)
     print(linea_horizontal)
     for y in range(ALTO):
@@ -54,7 +58,7 @@ def mostrarMapa(mapa):
             fila += f"{elemento}|"
         print(fila)
         print(linea_horizontal)
-
+    """
 def realizarViaje():
     while not stop_event.is_set():  # Revisa stop_event en cada ciclo
         global permisoMovimiento, clienteDentro, ubicacion, destino, mapa, letraUbicacion
@@ -79,68 +83,85 @@ def realizarViaje():
             antiguaPosicion = ubicacion
             enviarPosicionTaxi(ID_TAXI, ubicacion, antiguaPosicion, False, KO)
 
-        time.sleep(2)
-
 def cerebroDigitalEngine():
     global clienteDentro
-    while not stop_event.is_set():  # Revisa stop_event en cada ciclo
-        if recibirActualizacionMapa() and recibirPosicionCliente():
+
+    mapaAct = False
+    ordenRecibido = False
+
+    while not stop_event.is_set():
+
+        if not mapaAct and recibirActualizacionMapa():
+            mapaAct = True
+
+        if not ordenRecibido and recibirPosicionCliente():
+            ordenRecibido = True
+
+        if mapaAct and ordenRecibido:
             clienteDentro = False
             realizarViaje()
+            mapaAct = False
+            ordenRecibido = False
+            
+        time.sleep(0.1)
 
 def recibirActualizacionMapa():
     global mapa
+    grupo = f'taxi_{ID_TAXI}'
+    with lock:
+        consumer = KafkaConsumer(
+            'actualizar_mapa',
+            bootstrap_servers=[f"{IP_GESTOR}:{PUERTO_GESTOR}"],
+            value_deserializer=lambda v: json.loads(v.decode('utf-8')),
+            auto_offset_reset='earliest',
+            enable_auto_commit=False,
+            group_id=grupo
+        )
 
-    consumer = KafkaConsumer(
-        'actualizar_mapa',
-        bootstrap_servers=[f"{IP_GESTOR}:{PUERTO_GESTOR}"],
-        value_deserializer=lambda v: json.loads(v.decode('utf-8')),
-        auto_offset_reset='latest',
-    )
+        for message in consumer:
+            with mapa_lock:
+                mapa = message.value
+                return True
 
-    for message in consumer:
-        if stop_event.is_set():  # Revisa stop_event en cada ciclo de consumo
-            return False
-        with mapa_lock:
-            mapa = message.value
-        return True
-
-    return False
+        return False
 
 def recibirPosicionCliente():
     global destino, letraUbicacion
 
-    consumer = KafkaConsumer(
-        'procesar_viaje',
-        bootstrap_servers=[f"{IP_GESTOR}:{PUERTO_GESTOR}"],
-        value_deserializer=lambda v: json.loads(v.decode('utf-8')),
-        auto_offset_reset='earliest',
-        enable_auto_commit=False,
-        group_id='taxi_group'
-    )
+    with lock:
+        group_id = f"taxi_group_{ID_TAXI}"
+        consumer = KafkaConsumer(
+            'procesar_viaje',
+            bootstrap_servers=[f"{IP_GESTOR}:{PUERTO_GESTOR}"],
+            value_deserializer=lambda v: json.loads(v.decode('utf-8')),
+            auto_offset_reset='latest',
+            enable_auto_commit=False,
+            group_id=group_id
+        )
 
-    try:
-        messages = consumer.poll(timeout_ms=1000)
-        
-        if not messages or stop_event.is_set():
-            return False
+        try:
+            messages = consumer.poll(timeout_ms=10) 
 
-        for topic_partition, msgs in messages.items():
-            for message in msgs:
-                info = message.value
-                print("Mensaje recibido con ID: " + info['taxi_id'])
-                taxi_id = info['taxi_id']
-                if taxi_id == ID_TAXI:
-                    destino = info['posDestino']
-                    letraUbicacion = info['letraDestino']
-                    consumer.commit({topic_partition: OffsetAndMetadata(message.offset + 1, None)})
-                    print("RECIBIDO ORDEN DE VIAJE")
-                    return True
-    except Exception as e:
-        print(f"Error al recibir la orden del servicio: {e}")
-        traceback.print_exc()
+            if not messages or stop_event.is_set():
+                print("No se ha recibido ningún mensaje de Central")
+                return False
 
-    return False
+            for topic_partition, msgs in messages.items():
+                for message in msgs:
+                    info = message.value
+                    print("Mensaje recibido con ID: " + info['taxi_id'])
+                    key = message.key.decode('utf-8') if message.key else None
+                    if key == ID_TAXI or info['taxi_id'] == ID_TAXI:
+                        destino = info['posDestino']
+                        letraUbicacion = info['letraDestino']
+                        consumer.commit({topic_partition: OffsetAndMetadata(message.offset + 1, None)})
+                        print("RECIBIDO ORDEN DE VIAJE")
+                        return True
+        except Exception as e:
+            print(f"Error al recibir la orden del servicio: {e}")
+            traceback.print_exc()
+
+        return False
 
 def enviarPosicionTaxi(taxi_id, posicion, antiguaPosicion, finalizado, estadoSensor):
     producerTAXI = KafkaProducer(bootstrap_servers=[f"{IP_GESTOR}:{PUERTO_GESTOR}"],value_serializer=lambda v: json.dumps(v).encode('utf-8'))

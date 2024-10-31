@@ -59,18 +59,18 @@ def envioMuchasPeticiones(peticion, customerXtaxis, peticionesXtaxis, taxi):
     global viajeTerminado
     # peticion = (customer_id, destinos)
     
-    print(f"Enviando ordenes al taxi {str(taxi[0])}")    
+    print(f"Enviando ordenes al taxi {str(taxi[0])}: {str(peticion)}")    
     cambiarEstadoTaxiFichero(taxi[0], "NO")
     
     for unDestino in peticion:
+        enviarMensajeTaxiMapa()
         with lock:
             viajeTerminado = False
             customerXtaxis.append((peticion[0], taxi[0]))
             peticionesXtaxis.append((peticion,taxi[0]))
-        meterEnMapa(unDestino[1], unDestino[2], unDestino[0])
+            meterEnMapa(unDestino[1], unDestino[2], unDestino[0])
+            enviarMensajeTaxiOrden(taxi[0],(unDestino[1], unDestino[2]), unDestino[0])
         enviarMensajeTaxiMapa()
-        
-        enviarMensajeTaxiOrden(taxi[0],(unDestino[1], unDestino[2]), unDestino[0])
         
         while True:
             with lock:
@@ -102,6 +102,8 @@ def conexionKafka():
                 peticion = tuple(peticionf)  
                 
                 peticion = peticion[0]  
+                
+                print("Peticion recibido: " +str(peticion))
 
                 taxi = hayTaxisDisponibles(peticion[0][1], peticion[0][2])
 
@@ -136,15 +138,17 @@ def conexionKafka():
 
 def enviarMensajeTaxiMapa():
     global mapa
-    producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
-    producerTaxi.send('actualizar_mapa', value=mapa)
-    producerTaxi.flush()
+    with lock:
+        producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
+        producerTaxi.send('actualizar_mapa', value=mapa)
+        producerTaxi.flush()
+    print("Mapa actualizado enviado")
     
 def enviarMensajeTaxiOrden(taxi_id, destino, letraDestino):
     producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
     topic = 'procesar_viaje'
     message = {'taxi_id': taxi_id, 'posDestino': destino, 'letraDestino': letraDestino}
-    producerTaxi.send(topic, value=message)
+    producerTaxi.send(topic, key=taxi_id.encode(), value=message)
     producerTaxi.flush()
     print("Enviado orden de viaje al Taxi " + str(taxi_id))
 
@@ -177,6 +181,7 @@ def recibirMensajeTaxi():
 
             for topic_partition, records in message.items():
                 for record in records:
+                    print("RECIBIDO ORDEN")
                     taxi_status = record.value
                     taxi_id = taxi_status.get('taxi_id')
                     taxi_posicion = taxi_status.get('taxi_posicion')

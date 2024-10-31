@@ -155,7 +155,6 @@ def procesar_formulario(lista_destinos):
         enviar_solicitud_taxi(cliente_nombre, destinos)
 
     else:
-    
         if ubicacion[0] > ANCHO or ubicacion[1] > ALTO:
             messagebox.showerror("Error", "Por favor, no todos los campos son correctos.")
             return
