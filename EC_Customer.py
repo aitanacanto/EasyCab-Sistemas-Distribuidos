@@ -16,14 +16,15 @@ ANCHO = 20
 ALTO = 20
 
 # Función para procesar argumentos
-if len(sys.argv) != 2:
+if len(sys.argv) != 3:
     print("ERROR: Número de argumentos incorrecto")    
-    print("Formato correcto -> python3 EC_Customer.py <op>\n")
+    print("Formato correcto -> python3 EC_Customer.py <IP_GESTOR> <op>\n")
     print("OP: <-f> -> Formulario / <nombre.json> -> Fichero destinos")
     exit()
 
 argumentos = sys.argv
-OPCION = str(argumentos[1])
+IP_GESTOR = str(argumentos[1])
+OPCION = str(argumentos[2])
 global ubicacion_taxi
 
 # Función para serializar el mensaje a JSON
@@ -31,7 +32,7 @@ def json_serializer(data):
     return json.dumps(data).encode('utf-8')
 
 # Inicializar productor de Kafka
-producer = KafkaProducer(bootstrap_servers=['localhost:9092'],
+producer = KafkaProducer(bootstrap_servers=[f"{IP_GESTOR}:{'9092'}"],
                          value_serializer=json_serializer)
 
 def recibirMensajesDeCentral():
@@ -41,7 +42,7 @@ def recibirMensajesDeCentral():
 
     consumer = KafkaConsumer(
         'mensajes_a_consumer',
-        bootstrap_servers='localhost:9092',
+        bootstrap_servers=[f"{IP_GESTOR}:{'9092'}"],
         value_deserializer=lambda v: json.loads(v.decode('utf-8')),
         auto_offset_reset='earliest',
         enable_auto_commit=False,

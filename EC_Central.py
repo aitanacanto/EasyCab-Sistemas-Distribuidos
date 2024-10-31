@@ -197,7 +197,6 @@ def recibirMensajeTaxi():
                     estado_sensor = taxi_status.get('estado_sensor')
                     peticion = (taxi_id, taxi_posicion, viaje_finalizado, antigua_posicion, estado_sensor)
                     peticiones.append(peticion)
-                    enviarMensajeTaxiMapa()
 
         return peticiones
 

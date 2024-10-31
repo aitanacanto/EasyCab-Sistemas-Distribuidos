@@ -154,10 +154,9 @@ def recibirPosicionCliente():
         )
 
         try:
-            messages = consumer.poll(timeout_ms=1000)  # Aumentar timeout para dar tiempo a recibir mensajes
+            messages = consumer.poll(timeout_ms=1000) 
 
             if not messages or stop_event.is_set():
-                print("No se ha recibido ningún mensaje de Central")
                 return False
 
             for topic_partition, msgs in messages.items():
@@ -175,7 +174,7 @@ def recibirPosicionCliente():
             print(f"Error al recibir la orden del servicio: {e}")
             traceback.print_exc()
         finally:
-            consumer.close()  # Asegurarse de cerrar el consumidor
+            consumer.close() 
 
         return False
 
@@ -215,7 +214,7 @@ def conexionSensor():
             elif mensaje == FIN:
                 conexion.sendall(FIN.encode())
                 print("Recibido FIN, terminando conexión...")
-                stop_event.set()  # Activa evento de parada
+                stop_event.set()
                 break
 
             if time.time() - last_message_time > timeout_seconds:
@@ -321,5 +320,5 @@ hiloSensor.join()
 hiloKafka.join()
 
 if stop_event.is_set():
-    consumer_actualizacion_mapa.close()  # Cerrar el consumidor de Kafka
+    consumer_actualizacion_mapa.close()
     sys.exit("Programa terminado correctamente.")
