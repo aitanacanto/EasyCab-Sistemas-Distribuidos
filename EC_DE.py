@@ -45,10 +45,20 @@ mapa = None
 permisoMovimiento = False
 mapa_lock = threading.Lock()
 
+# Consumidor de Kafka para actualizaciones del mapa (reutilizable)
+consumer_actualizacion_mapa = KafkaConsumer(
+    'actualizar_mapa',
+    bootstrap_servers=[f"{IP_GESTOR}:{PUERTO_GESTOR}"],
+    value_deserializer=lambda v: json.loads(v.decode('utf-8')),
+    auto_offset_reset='earliest',
+    enable_auto_commit=False,
+    group_id=f'taxi_{ID_TAXI}'  # Asegurar un group_id único para cada instancia
+)
+
 ############ FUNCIONES #############
 
 def mostrarMapa(mapa):
-    """
+
     linea_horizontal = '-' * (ANCHO * 2 + 1)
     print(linea_horizontal)
     for y in range(ALTO):
@@ -58,7 +68,7 @@ def mostrarMapa(mapa):
             fila += f"{elemento}|"
         print(fila)
         print(linea_horizontal)
-    """
+
 def realizarViaje():
     while not stop_event.is_set():  # Revisa stop_event en cada ciclo
         global permisoMovimiento, clienteDentro, ubicacion, destino, mapa, letraUbicacion
@@ -82,6 +92,8 @@ def realizarViaje():
         else:
             antiguaPosicion = ubicacion
             enviarPosicionTaxi(ID_TAXI, ubicacion, antiguaPosicion, False, KO)
+            
+        time.sleep(1)
 
 def cerebroDigitalEngine():
     global clienteDentro
@@ -107,40 +119,42 @@ def cerebroDigitalEngine():
 
 def recibirActualizacionMapa():
     global mapa
-    grupo = f'taxi_{ID_TAXI}'
+    global consumer_actualizacion_mapa
     with lock:
-        consumer = KafkaConsumer(
-            'actualizar_mapa',
-            bootstrap_servers=[f"{IP_GESTOR}:{PUERTO_GESTOR}"],
-            value_deserializer=lambda v: json.loads(v.decode('utf-8')),
-            auto_offset_reset='earliest',
-            enable_auto_commit=False,
-            group_id=grupo
-        )
-
-        for message in consumer:
-            with mapa_lock:
-                mapa = message.value
-                return True
-
-        return False
+        try:
+            # Utiliza poll para obtener mensajes disponibles
+            messages = consumer_actualizacion_mapa.poll(timeout_ms=1000)
+            
+            if messages:
+                for topic_partition, msgs in messages.items():
+                    for message in msgs:
+                        with mapa_lock:
+                            mapa = message.value
+                            consumer_actualizacion_mapa.commit({topic_partition: OffsetAndMetadata(message.offset + 1, None)})
+                            return True
+        except Exception as e:
+            print(f"Error al recibir la actualización del mapa: {e}")
+            traceback.print_exc()
+            
+    return False
 
 def recibirPosicionCliente():
     global destino, letraUbicacion
 
     with lock:
+        # Consumidor para procesar el viaje (cada taxi debe tener un group_id único)
         group_id = f"taxi_group_{ID_TAXI}"
         consumer = KafkaConsumer(
             'procesar_viaje',
             bootstrap_servers=[f"{IP_GESTOR}:{PUERTO_GESTOR}"],
             value_deserializer=lambda v: json.loads(v.decode('utf-8')),
-            auto_offset_reset='latest',
+            auto_offset_reset='earliest',
             enable_auto_commit=False,
             group_id=group_id
         )
 
         try:
-            messages = consumer.poll(timeout_ms=10) 
+            messages = consumer.poll(timeout_ms=1000)  # Aumentar timeout para dar tiempo a recibir mensajes
 
             if not messages or stop_event.is_set():
                 print("No se ha recibido ningún mensaje de Central")
@@ -160,11 +174,13 @@ def recibirPosicionCliente():
         except Exception as e:
             print(f"Error al recibir la orden del servicio: {e}")
             traceback.print_exc()
+        finally:
+            consumer.close()  # Asegurarse de cerrar el consumidor
 
         return False
 
 def enviarPosicionTaxi(taxi_id, posicion, antiguaPosicion, finalizado, estadoSensor):
-    producerTAXI = KafkaProducer(bootstrap_servers=[f"{IP_GESTOR}:{PUERTO_GESTOR}"],value_serializer=lambda v: json.dumps(v).encode('utf-8'))
+    producerTAXI = KafkaProducer(bootstrap_servers=[f"{IP_GESTOR}:{PUERTO_GESTOR}"], value_serializer=lambda v: json.dumps(v).encode('utf-8'))
     topic = 'actualizaciones_taxi'
     message = {'taxi_id': taxi_id, 'taxi_posicion': posicion, 'viaje_finalizado': finalizado, 'antigua_posicion': antiguaPosicion, 'estado_sensor': estadoSensor}
     producerTAXI.send(topic, message)
@@ -201,8 +217,6 @@ def conexionSensor():
                 print("Recibido FIN, terminando conexión...")
                 stop_event.set()  # Activa evento de parada
                 break
-
-            # print(f"Mensaje Sensor entrante: [{mensaje}]")                DESCOMENTAR
 
             if time.time() - last_message_time > timeout_seconds:
                 print("Tiempo de espera agotado. Enviando FIN...")
@@ -307,4 +321,5 @@ hiloSensor.join()
 hiloKafka.join()
 
 if stop_event.is_set():
+    consumer_actualizacion_mapa.close()  # Cerrar el consumidor de Kafka
     sys.exit("Programa terminado correctamente.")

@@ -94,8 +94,15 @@ def conexionKafka():
         else:
             peticiones = recibirPeticionesCustomers()       # (customer_id, array_destinos)
 
-        if peticiones:
-            for peticion in peticiones:
+        arrayPeticiones = []
+
+        if isinstance(peticiones, tuple):
+            arrayPeticiones.append(peticiones)
+        else:
+            arrayPeticiones = peticiones
+
+        if arrayPeticiones:
+            for peticion in arrayPeticiones:
                 
                 peticionf = list(peticion)
                 peticionf.pop(0)  
