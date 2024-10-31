@@ -119,24 +119,6 @@ def cerebroDigitalEngine():
 
 def recibirActualizacionMapa():
     global mapa
-<<<<<<< HEAD
-
-    consumer = KafkaConsumer(
-        'actualizar_mapa',
-        bootstrap_servers=[f"{IP_GESTOR}:{PUERTO_GESTOR}"],
-        value_deserializer=lambda v: json.loads(v.decode('utf-8')),
-        auto_offset_reset='latest',
-        enable_auto_commit=False  
-    )
-
-    for message in consumer:
-        if stop_event.is_set():  # Revisa stop_event en cada ciclo de consumo
-            return False
-        with mapa_lock:
-            mapa = message.value
-        return True
-
-=======
     global consumer_actualizacion_mapa
     with lock:
         try:
@@ -154,7 +136,6 @@ def recibirActualizacionMapa():
             print(f"Error al recibir la actualización del mapa: {e}")
             traceback.print_exc()
             
->>>>>>> Levan
     return False
 
 def recibirPosicionCliente():
@@ -341,4 +322,3 @@ hiloKafka.join()
 
 if stop_event.is_set():
     consumer_actualizacion_mapa.close()  # Cerrar el consumidor de Kafka
-    sys.exit("Programa terminado correctamente.")
