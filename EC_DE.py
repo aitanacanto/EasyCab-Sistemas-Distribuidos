@@ -36,7 +36,6 @@ ID_TAXI = argumentos[7]
 # Variables compartidas
 letraUbicacion = None
 ubicacion = None
-cliente = None
 destino = None
 clienteDentro = False
 mapa = None
@@ -58,25 +57,21 @@ def mostrarMapa(mapa):
 
 def realizarViaje():
     while not stop_event.is_set():  # Revisa stop_event en cada ciclo
-        global permisoMovimiento, clienteDentro, ubicacion, destino, mapa
+        global permisoMovimiento, clienteDentro, ubicacion, destino, mapa, letraUbicacion
 
         if permisoMovimiento:
             mostrarMapa(mapa)
             antiguaPosicion = ubicacion
 
-            if not clienteDentro:
-                ubicacion = actualizarPosicion(cliente, destino, mapa)
-                enviarPosicionTaxi(ID_TAXI, ubicacion, antiguaPosicion, False, OK)
-
-                if ubicacion[0] == cliente[0] and ubicacion[1] == cliente[1]:
-                    clienteDentro = True
+            ubicacion = actualizarPosicion(destino, mapa, letraUbicacion)
+            
+            print(f"Destino --> {str(destino[0])}, {str(destino[1])}")
+            
+            if ubicacion[0] == destino[0] and ubicacion[1] == destino[1]:
+                enviarPosicionTaxi(ID_TAXI, ubicacion, antiguaPosicion, True, OK)
+                break
             else:
-                ubicacion = actualizarPosicion(cliente, destino, mapa)
-                if ubicacion[0] == destino[0] and ubicacion[1] == destino[1] and not recibirPosicionCliente():
-                    enviarPosicionTaxi(ID_TAXI, ubicacion, antiguaPosicion, True, OK)
-                    break
-                else:
-                    enviarPosicionTaxi(ID_TAXI, ubicacion, antiguaPosicion, False, OK)
+                enviarPosicionTaxi(ID_TAXI, ubicacion, antiguaPosicion, False, OK)
 
             while not recibirActualizacionMapa() and not stop_event.is_set():
                 time.sleep(0.1)
@@ -113,7 +108,7 @@ def recibirActualizacionMapa():
     return False
 
 def recibirPosicionCliente():
-    global cliente, destino, letraUbicacion
+    global destino, letraUbicacion
 
     consumer = KafkaConsumer(
         'procesar_viaje',
@@ -136,7 +131,6 @@ def recibirPosicionCliente():
                 print("Mensaje recibido con ID: " + info['taxi_id'])
                 taxi_id = info['taxi_id']
                 if taxi_id == ID_TAXI:
-                    cliente = info['posCliente']
                     destino = info['posDestino']
                     letraUbicacion = info['letraDestino']
                     consumer.commit({topic_partition: OffsetAndMetadata(message.offset + 1, None)})
@@ -172,7 +166,7 @@ def conexionSensor():
     last_message_time = time.time()
     conexion.settimeout(timeout_seconds)
 
-    while not stop_event.is_set():  # Revisa stop_event
+    while not stop_event.is_set():
         try:
             mensaje = conexion.recv(4096).decode()
             if mensaje == OK:
@@ -187,7 +181,7 @@ def conexionSensor():
                 stop_event.set()  # Activa evento de parada
                 break
 
-            print(f"Mensaje Sensor entrante: [{mensaje}]")
+            # print(f"Mensaje Sensor entrante: [{mensaje}]")                DESCOMENTAR
 
             if time.time() - last_message_time > timeout_seconds:
                 print("Tiempo de espera agotado. Enviando FIN...")
@@ -248,7 +242,7 @@ def movimiento(posX, posY, objetivo, mapa, letraUbicacion):
 
     return (posX, posY)
 
-def actualizarPosicion(cliente, destino, mapa):
+def actualizarPosicion(destino, mapa, letra):
     global ubicacion
     global clienteDentro
     global letraUbicacion
@@ -256,14 +250,7 @@ def actualizarPosicion(cliente, destino, mapa):
     posX = ubicacion[0]
     posY = ubicacion[1]
 
-    if clienteDentro:
-        objetivo = destino
-        letraObjetivo = letraUbicacion.upper()
-    else:
-        objetivo = cliente
-        letraObjetivo = letraUbicacion.lower()
-
-    return movimiento(posX, posY, objetivo, mapa, letraObjetivo)
+    return movimiento(posX, posY, destino, mapa, letra)
 
 def validarID(socketCentral):
     global ubicacion

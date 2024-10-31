@@ -38,38 +38,40 @@ def dibujar_mapa(mapa_data):
 
     for y in range(ALTO):
         for x in range(ANCHO):
-            rect = pygame.Rect(x * TAMANO_CELDA, y * TAMANO_CELDA, TAMANO_CELDA, TAMANO_CELDA)
-
-            if mapa_data[x][y] == ' ':
-                color = COLOR_FONDO
-                texto = ''
-            elif mapa_data[x][y][0].isdigit():  # Taxi
-                if mapa_data[x][y][1] == 'r':
-                    color = COLOR_ROJO
-                elif mapa_data[x][y][1] == 'a':
-                    color = COLOR_AMARILLO
+            try:
+                rect = pygame.Rect(x * TAMANO_CELDA, y * TAMANO_CELDA, TAMANO_CELDA, TAMANO_CELDA)
+                if mapa_data[x][y] == ' ':
+                    color = COLOR_FONDO
+                    texto = ''
+                elif mapa_data[x][y][0].isdigit():  # Taxi
+                    if mapa_data[x][y][1] == 'r':
+                        color = COLOR_ROJO
+                    elif mapa_data[x][y][1] == 'a':
+                        color = COLOR_AMARILLO
+                    else:
+                        color = COLOR_VERDE
+                    texto = mapa_data[x][y][0]
+                elif mapa_data[x][y].isalpha() and mapa_data[x][y].isupper():  # Destino
+                    color = COLOR_DESTINO
+                    texto = mapa_data[x][y]
+                elif mapa_data[x][y].isalpha() and mapa_data[x][y].islower():  # Cliente
+                    color = COLOR_CLIENTE
+                    texto = mapa_data[x][y]
                 else:
-                    color = COLOR_VERDE
-                texto = mapa_data[x][y][0]
-            elif mapa_data[x][y].isalpha() and mapa_data[x][y].isupper():  # Destino
-                color = COLOR_DESTINO
-                texto = mapa_data[x][y]
-            elif mapa_data[x][y].isalpha() and mapa_data[x][y].islower():  # Cliente
-                color = COLOR_CLIENTE
-                texto = mapa_data[x][y]
-            else:
-                color = COLOR_FONDO
-                texto = ''
+                    color = COLOR_FONDO
+                    texto = ''
 
-            # Dibujar la celda con el color correspondiente
-            pygame.draw.rect(screen, color, rect)
-            pygame.draw.rect(screen, COLOR_BORDE, rect, ANCHO_BORDE)
+                # Dibujar la celda con el color correspondiente
+                pygame.draw.rect(screen, color, rect)
+                pygame.draw.rect(screen, COLOR_BORDE, rect, ANCHO_BORDE)
 
-            # Dibujar el texto en la celda si no está vacío
-            if texto:
-                text_surface = font.render(texto, True, COLOR_TEXTO)
-                text_rect = text_surface.get_rect(center=rect.center)
-                screen.blit(text_surface, text_rect)
+                # Dibujar el texto en la celda si no está vacío
+                if texto:
+                    text_surface = font.render(texto, True, COLOR_TEXTO)
+                    text_rect = text_surface.get_rect(center=rect.center)
+                    screen.blit(text_surface, text_rect)
+            except Exception as e:
+                print(f"Error representar el mapa --> {mapa_data[x][y]}")
 
     pygame.display.flip()
 

@@ -90,21 +90,18 @@ def mensajeriaConCentral():
 
 
 # Función para enviar la solicitud de taxi
-def enviar_solicitud_taxi(cliente_nombre, ubicacion, destino, codigo):
+def enviar_solicitud_taxi(cliente_nombre, destino):
     global numeroIdentificacion
     numero_aleatorio = str(random.randint(1, 10000))
     numeroIdentificacion = numero_aleatorio
 
     solicitud = {
         "numero_identificacion": numero_aleatorio,
-        "cliente_nombre": cliente_nombre,
-        "ubicacion": ubicacion,
         "destinos" : destino,
-        "codigo"    : codigo
     }
     
     producer.send('solicitud_taxi', solicitud)
-    print(f"Solicitud enviada, en breves su taxi pasara a por usted, ", cliente_nombre,".")
+    print(f"Solicitud enviada, en breves su taxi pasara a por usted,", cliente_nombre,".")
     producer.flush()
 
 
@@ -152,8 +149,10 @@ def procesar_formulario(lista_destinos):
         if (destino[0] or ubicacion[0]) > ANCHO or (destino[1] or ubicacion[1]) > ALTO:
             messagebox.showerror("Error", "Por favor, no todos los campos son correctos.")
             return
-        
-        enviar_solicitud_taxi(cliente_nombre, ubicacion, destino, '1')
+
+        destinos = [ubicacion, destino]
+
+        enviar_solicitud_taxi(cliente_nombre, destinos)
 
     else:
     
@@ -161,9 +160,11 @@ def procesar_formulario(lista_destinos):
             messagebox.showerror("Error", "Por favor, no todos los campos son correctos.")
             return
         
-        enviar_solicitud_taxi(cliente_nombre, ubicacion, lista_destinos, '2')
-
-    
+        print(str(ubicacion))
+        
+        lista_destinos.insert(0, {"Id": id_customer, "POS": (int(ubicacion[0]),int(ubicacion[1]))})
+        
+        enviar_solicitud_taxi(cliente_nombre, lista_destinos)
     
     # Mostrar mensaje de éxito
     messagebox.showinfo("Éxito", "Solicitud de taxi enviada con éxito!")
