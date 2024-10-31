@@ -322,3 +322,4 @@ hiloKafka.join()
 
 if stop_event.is_set():
     consumer_actualizacion_mapa.close()  # Cerrar el consumidor de Kafka
+    sys.exit("Programa terminado correctamente.")
