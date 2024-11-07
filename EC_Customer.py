@@ -1,3 +1,4 @@
+# Levan Kipiani, Aitana Cantó
 import tkinter as tk
 from tkinter import messagebox
 from kafka import KafkaProducer, KafkaConsumer, OffsetAndMetadata

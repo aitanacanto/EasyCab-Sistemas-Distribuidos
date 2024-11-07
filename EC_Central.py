@@ -1,3 +1,4 @@
+# Levan Kipiani, Aitana Cantó
 import socket
 import sys
 import threading
@@ -10,9 +11,6 @@ from threading import Lock
 
 lock = threading.Lock()
 
-
-############ COSAS A MEJORARA ############
-# Vaciar la mensajería de las solicitudes del customer a la central
 
 ANCHO = 20
 ALTO = 20
@@ -57,7 +55,7 @@ def meterEnMapa(pos_x, pos_y, elemento):
 
 def envioMuchasPeticiones(peticion, customerXtaxis, peticionesXtaxis, taxi):
     global viajeTerminado
-    # peticion = (customer_id, destinos)
+
     
     print(f"Enviando ordenes al taxi {str(taxi[0])}: {str(peticion)}")    
     cambiarEstadoTaxiFichero(taxi[0], "NO")

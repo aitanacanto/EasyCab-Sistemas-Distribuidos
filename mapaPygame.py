@@ -1,3 +1,4 @@
+# Levan Kipiani, Aitana Cantó
 import pygame
 import sys
 import queue
