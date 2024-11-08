@@ -55,9 +55,7 @@ def meterEnMapa(pos_x, pos_y, elemento):
 
 def envioMuchasPeticiones(peticion, customerXtaxis, peticionesXtaxis, taxi):
     global viajeTerminado
-
-    
-    print(f"Enviando ordenes al taxi {str(taxi[0])}: {str(peticion)}")    
+  
     cambiarEstadoTaxiFichero(taxi[0], "NO")
     
     for unDestino in peticion:
@@ -100,15 +98,21 @@ def conexionKafka():
             arrayPeticiones = peticiones
 
         if arrayPeticiones:
+
+            print("----------------------------------")
+            print("Peticiones: " + str(arrayPeticiones))
+            print("----------------------------------")
+
             for peticion in arrayPeticiones:
                 
                 peticionf = list(peticion)
                 peticionf.pop(0)  
-                peticion = tuple(peticionf)  
-                
-                peticion = peticion[0]  
-                
-                print("Peticion recibido: " +str(peticion))
+                peticion = tuple(peticionf)
+
+                peticion = peticion[0]
+
+                if isinstance(peticion, tuple):
+                    break
 
                 taxi = hayTaxisDisponibles(peticion[0][1], peticion[0][2])
 
@@ -117,6 +121,7 @@ def conexionKafka():
                     hiloSolicitudes.start()
                 else:
                     listaEsperaClientes.append(peticion)
+                    time.sleep(4)                                   # Lo ponemos en la lista de espera y nos esperamos 4 segundos
                 
 
         movimientosTaxi = recibirMensajeTaxi()
