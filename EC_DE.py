@@ -206,6 +206,9 @@ def conexionSensor():
     while not stop_event.is_set():
         try:
             mensaje = conexion.recv(4096).decode()
+            
+            print("Mensaje del sensor --> " + str(mensaje))
+            
             if mensaje == OK:
                 permisoMovimiento = True
                 last_message_time = time.time()
