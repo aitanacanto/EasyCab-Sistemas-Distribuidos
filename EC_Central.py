@@ -508,9 +508,6 @@ def hayTaxisDisponibles(cliente_x, cliente_y):
     if not lineas:
         return None
 
-    taxiMasCercano = None
-    minDistancia = float('inf')
-
     for linea in lineas:
         datos = linea.strip().replace('<', '').split('>')
 
@@ -521,14 +518,12 @@ def hayTaxisDisponibles(cliente_x, cliente_y):
             taxi_x = int(datos[3])
             taxi_y = int(datos[4])
 
+            # Verifica si el taxi está disponible
             if taxi_asignado == "SI" and taxi_operativo == "SI":
-                distancia = math.sqrt((taxi_x - cliente_x) ** 2 + (taxi_y - cliente_y) ** 2)
+                return (taxi_id, taxi_x, taxi_y)
 
-                if distancia < minDistancia:
-                    minDistancia = distancia
-                    taxiMasCercano = (taxi_id, taxi_x, taxi_y)
+    return None  # Devuelve None si no hay taxis disponibles
 
-    return taxiMasCercano
 
 def meterTaxisBaseDatos(arrayPos):
     arrayTaxis = []
