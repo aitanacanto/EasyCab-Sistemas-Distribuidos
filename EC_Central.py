@@ -219,7 +219,10 @@ def obtener_lista_ubicaciones(ruta_archivo, lista_letras):
             for location in datos["locations"]:
                 letra = location["Id"]
                 x, y = map(int, location["POS"].split(","))
-                lista_ubicaciones.append((letra, x, y))
+                if x <= ANCHO and x > 0 and y <= ALTO and y > 0:
+                    lista_ubicaciones.append((letra, x-1, y-1))
+                else:
+                    print("Error. Revisa el json de localizaciones.")
     except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
         print("Error al leer el archivo:", e)
         return []

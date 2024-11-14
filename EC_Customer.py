@@ -161,9 +161,8 @@ def procesar_formulario(lista_destinos):
             messagebox.showerror("Error", "Por favor, no todos los campos son correctos.")
             return
         
-        print(str(ubicacion))
         
-        lista_destinos.insert(0, {"Id": id_customer, "POS": (int(ubicacion[0]),int(ubicacion[1]))})
+        lista_destinos.insert(0, {"Id": id_customer, "POS": (int(ubicacion[0]-1),int(ubicacion[1]-1))})
         
         enviar_solicitud_taxi(cliente_nombre, lista_destinos)
     
