@@ -265,16 +265,16 @@ def movimiento(posX, posY, objetivo, mapa, letraUbicacion):
         posY -= 1
 
     else:
-        if mapa[posX-1][posY+1] == ' ':
+        if posX != 0 and posY != 19 and mapa[posX-1][posY+1] == ' ':
             posX -= 1
             posY += 1
-        elif mapa[posX-1][posY-1] == ' ':
+        elif posX != 0 and posY != 0 and mapa[posX-1][posY-1] == ' ':
             posX -= 1
             posY -= 1
-        elif mapa[posX+1][posY+1] == ' ':
+        elif posX != 19 and posY != 19 and mapa[posX+1][posY+1] == ' ':
             posX += 1
             posY += 1
-        elif mapa[posX+1][posY-1] == ' ':
+        elif posX != 19 and posY != 0 and mapa[posX+1][posY-1] == ' ':
             posX += 1
             posY -= 1
 
