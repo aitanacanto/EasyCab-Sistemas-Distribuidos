@@ -168,10 +168,10 @@ def vueltaBase(taxi_id):
 
 #################### KAFKA #####################
 
-def meterEnMapa(pos_x, pos_y, elemento):
+def meterEnMapa(pos_x, pos_y, elemento, estado_taxi):
     mapa[pos_x][pos_y] = elemento
-    mapa[1][1] = 'X'
-    mapaPygame.actualizar_mapa_pygame(mapa)
+    mapaPygame.actualizar_mapa_pygame(mapa, estado_taxi, "OK")
+
 
 def envioMuchasPeticiones(peticion, customerXtaxis, peticionesXtaxis, taxi):
     global viajeTerminado, estadoEmergencia, estadoEmergencia
@@ -192,7 +192,8 @@ def envioMuchasPeticiones(peticion, customerXtaxis, peticionesXtaxis, taxi):
                 viajeTerminado = False
                 customerXtaxis.append((peticion[0], taxi[0]))
                 peticionesXtaxis.append((peticion, taxi[0]))
-                meterEnMapa(unDestino[1], unDestino[2], unDestino[0])
+                estados_actualizados = leerEstadosDeTaxis(OK, unDestino[0])                     # Estado, destino
+                meterEnMapa(unDestino[1], unDestino[2], unDestino[0], estados_actualizados)
                 enviarMensajeTaxiOrden(taxi[0], (unDestino[1], unDestino[2]), unDestino[0])
             enviarMensajeTaxiMapa()
             
@@ -374,12 +375,16 @@ def obtener_lista_ubicaciones(ruta_archivo, lista_letras):
         for destino in lista_ubicaciones:
             if letra == destino[0]:
                 solucion.append(destino)
-                meterEnMapa(destino[1], destino[2], destino[0])
+                estados_actualizados = leerEstadosDeTaxis(OK, letra)    # Estado, destino
+                meterEnMapa(destino[1], destino[2], destino[0], estados_actualizados)
 
     if lista_ubicaciones:
-        meterEnMapa(lista_ubicaciones[0][1], lista_ubicaciones[0][2], lista_ubicaciones[0][0])
-    
+        estados_actualizados = leerEstadosDeTaxis(OK, letra) 
+        meterEnMapa(lista_ubicaciones[0][1], lista_ubicaciones[0][2], lista_ubicaciones[0][0], estados_actualizados)
+        
+    estados_actualizados = leerEstadosDeTaxis(OK, letra) 
     return solucion
+
 
 def recibirPeticionesCustomers():
     consumer = KafkaConsumer(
@@ -546,16 +551,44 @@ def existeMismaID(customer_id):
                 return True
     return False
 
-def cambiarPosicionTaxiMapa(taxi_id, taxi_posicion, antigua_posicion, estado_sensor):
-    # Limpiar la antigua posición del taxi
+def leerEstadosDeTaxis(estado, destino):
+    
+    estados = []
+    with open(ARCHIVO_TAXI, 'r') as archivo:
+        lineas = archivo.readlines()
+
+    if not lineas:
+        return None
+
+    for linea in lineas:
+        datos = linea.strip().replace('<', '').split('>')
+
+        if len(datos) >= 5:
+            taxi_asignado = datos[0]
+            taxi_id = datos[2]
+            
+            if taxi_asignado == "SI":
+                solicitud = {
+                    "id": taxi_id,
+                    "destino": destino,            # Implementar para poner el destino al que va
+                    "estado": estado
+                }
+            
+                estados.append(solicitud)
+
+    return estados
+
+def cambiarPosicionTaxiMapa(taxi_id, taxi_posicion, antigua_posicion, estado_sensor, destino):
     mapa[antigua_posicion[0]][antigua_posicion[1]] = ' '
-    # Añadir el nuevo estado del taxi en la nueva posición
+    
     if estado_sensor == OK:
         mapa[taxi_posicion[0]][taxi_posicion[1]] = f"{taxi_id}v"
     else:
         mapa[taxi_posicion[0]][taxi_posicion[1]] = f"{taxi_id}r"
 
-    mapaPygame.actualizar_mapa_pygame(mapa)  # Actualizar Pygame después de modificar el mapa
+    estado_taxi = leerEstadosDeTaxis(estado_sensor, destino)
+    mapaPygame.actualizar_mapa_pygame(mapa, estado_taxi, OK)
+
 
 ################## BASE DE DATOS ##################
 
