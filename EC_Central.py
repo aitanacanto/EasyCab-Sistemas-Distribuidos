@@ -4,10 +4,13 @@ import sys
 import threading
 import requests
 import time
+import secrets
 from kafka import KafkaProducer, KafkaConsumer, OffsetAndMetadata
 import json
 import mapaPygame
 from threading import Lock
+
+# TO-DO --> Hay que hacer una función para desconectar a los taxis ;)
 
 lock = threading.Lock()
 
@@ -20,6 +23,7 @@ CUSTOMERS_ACTIVOS = list((letra, False) for letra in 'abcdefghijklmnopqrstuvwxyz
 TAMANO_CELDA = 30
 ANCHO_BORDE = 1
 REFRESCO_MAPA = 1
+ARCHIVO_TOKENS = 'token.txt'
 
 global viajeTerminado
 viajeTerminado = False
@@ -53,6 +57,24 @@ listaEsperaClientes = []
 
 FIN = "<FIN>"
 OK = "OK"
+
+################### TOKENS ####################
+
+def leer_tokens():
+    tokens = {}
+    try:
+        with open(ARCHIVO_TOKENS, "r") as archivo:
+            for linea in archivo:
+                taxi_id, token = linea.strip().split(":")
+                tokens[taxi_id] = token
+    except FileNotFoundError:
+        pass  # Si el archivo no existe, devuelve un diccionario vacío
+    except Exception as e:
+        print(f"Error al leer el archivo de tokens: {e}")
+    return tokens
+
+def generar_token():
+    return secrets.token_hex(32)  
 
 ################# TEMPERATURA #################
 
@@ -110,6 +132,30 @@ def enviarTodosTaxisBase():
 
     return 
 
+def borrarLineaTokens(taxi_id):
+    try:
+        nuevas_lineas = []
+
+        # Leer el archivo de tokens y filtrar las líneas
+        with open(ARCHIVO_TOKENS, "r") as archivo:
+            lineas = archivo.readlines()
+
+        for linea in lineas:
+            id_actual, _ = linea.strip().split(":")
+            if id_actual != taxi_id:  # Mantener solo las líneas que no coincidan con el taxi_id
+                nuevas_lineas.append(linea)
+
+        # Escribir las líneas filtradas de vuelta en el archivo
+        with open(ARCHIVO_TOKENS, "w") as archivo:
+            archivo.writelines(nuevas_lineas)
+
+        print(f"Taxi {taxi_id} eliminado correctamente del archivo de tokens.")
+
+    except FileNotFoundError:
+        print(f"Error: El archivo {ARCHIVO_TOKENS} no existe.")
+    except Exception as e:
+        print(f"Error al borrar la línea del taxi {taxi_id}: {e}")
+
 def vueltaBase(taxi_id):
     global estadoEmergencia
     producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
@@ -118,6 +164,7 @@ def vueltaBase(taxi_id):
     producerTaxi.send(topic, key=taxi_id.encode(), value=message)
     producerTaxi.flush()
     print(f"Enviado orden de ir a la BASE al taxi: {taxi_id}")
+    borrarLineaTokens(taxi_id)
 
 #################### KAFKA #####################
 
@@ -200,7 +247,7 @@ def conexionKafka():
                 if isinstance(peticion, tuple):
                     break
 
-                taxi = hayTaxisDisponibles(peticion[0][1], peticion[0][2])
+                taxi = hayTaxisDisponibles()
 
                 if taxi is not None:
                     hiloSolicitudes = threading.Thread(target=envioMuchasPeticiones, args=(peticion, customerXtaxis, peticionesXtaxis, taxi))
@@ -285,8 +332,15 @@ def recibirMensajeTaxi():
                     viaje_finalizado = taxi_status.get('viaje_finalizado')
                     antigua_posicion = taxi_status.get('antigua_posicion')
                     estado_sensor = taxi_status.get('estado_sensor')
-                    peticion = (taxi_id, taxi_posicion, viaje_finalizado, antigua_posicion, estado_sensor)
-                    peticiones.append(peticion)
+                    token = taxi_status.get('token')
+                    
+                    tokens = leer_tokens()
+                    if taxi_id in tokens and tokens[taxi_id] == token:
+                        print(f"Token válido para taxi {taxi_id}. Procesando mensaje.")
+                        peticion = (taxi_id, taxi_posicion, viaje_finalizado, antigua_posicion, estado_sensor)
+                        peticiones.append(peticion)
+                    else:
+                        print(f"Token inválido para taxi {taxi_id}. Ignorando mensaje.")
 
         return peticiones
 
@@ -415,12 +469,17 @@ def validarUbicacion(id_taxi, conn):
             taxi_id = datos[2]
 
             if taxi_id == id_taxi:
+                nuevo_token = generar_token()
                 if taxi_asignado == "NO" and taxi_operativo == "NO":
                     taxiEncontrado = True
                     nueva_linea = f"<SI><SI><{taxi_id}><{datos[3]}><{datos[4]}>\n"
                     nuevasLineas.append(nueva_linea)
-                    mensaje = "<" + OK + "><"+ datos[3] +"><" + datos[4] + ">"
+                    mensaje = "<" + OK + "><"+ datos[3] + "><" + datos[4] + "><" + nuevo_token + ">"
                     conn.send(mensaje.encode(FORMAT))
+                    
+                    with open(ARCHIVO_TOKENS, 'a') as archivo_tokens:
+                        archivo_tokens.write(f"{taxi_id}:{nuevo_token}\n")
+                        
                 else:
                     taxiEncontrado = False
                     nuevasLineas.append(linea)
@@ -433,7 +492,7 @@ def validarUbicacion(id_taxi, conn):
 
         with open(ARCHIVO_TAXI, 'w') as archivo:
             archivo.writelines(nuevasLineas)
-
+            
     except Exception as e:
         print(f"EXCEPCIÓN ---> No se ha podido comunicar con el taxi: {e}")
 
@@ -515,8 +574,7 @@ def cambiarEstadoTaxiFichero(id_taxi, operativo):
                 taxi_id = datos[2]
                 taxi_x = datos[3]
                 taxi_y = datos[4]
-                #Aitana ha hecho esto
-
+                
                 if taxi_id == id_taxi:
                     taxiEncontrado = True
                     nuevaLinea = f"<{taxi_asignado}><{operativo}><{taxi_id}><{taxi_x}><{taxi_y}>\n"
@@ -588,7 +646,7 @@ def actualizarPosicionTaxiFichero(id_taxi, posicion, finalizado, estadoSensor):
 
         time.sleep(0.1)
 
-def hayTaxisDisponibles(cliente_x, cliente_y):
+def hayTaxisDisponibles():
     with open(ARCHIVO_TAXI, 'r') as archivo:
         lineas = archivo.readlines()
 

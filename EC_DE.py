@@ -7,6 +7,7 @@ from kafka import KafkaConsumer, KafkaProducer
 from kafka.structs import OffsetAndMetadata
 import json
 import traceback
+import requests
 from threading import Lock
 
 lock = threading.Lock()
@@ -21,6 +22,9 @@ argumentos = sys.argv
 FIN = "<FIN>"
 OK = "OK"
 KO = "KO"
+
+global token
+token = ''
 
 ALTO = 20
 ANCHO = 20
@@ -129,6 +133,21 @@ def realizarViaje():
             
             print(f"Destino --> {str(destino[0])}, {str(destino[1])}")
             
+            if ubicacion[0] == 1 and ubicacion[1] == 1:
+                # Llamar a EC_Registry para desconectar el taxi
+                try:
+                    url = f"http://<IP_EC_Registry>:5001/unregister_taxi/{ID_TAXI}"
+                    response = requests.delete(url)
+                    
+                    if response.status_code == 200:
+                        print(f"Taxi {ID_TAXI} desconectado correctamente en EC_Registry.")
+                    else:
+                        print(f"Error al desconectar el taxi {ID_TAXI}: {response.json()}")
+
+                except requests.exceptions.RequestException as e:
+                    print(f"Error al comunicarse con EC_Registry: {e}")
+                break
+            
             if ubicacion[0] == destino[0] and ubicacion[1] == destino[1]:
                 enviarPosicionTaxi(ID_TAXI, ubicacion, antiguaPosicion, True, OK)
                 break
@@ -232,9 +251,10 @@ def recibirPosicionCliente():
         return False
 
 def enviarPosicionTaxi(taxi_id, posicion, antiguaPosicion, finalizado, estadoSensor):
+    global token
     producerTAXI = KafkaProducer(bootstrap_servers=[f"{IP_GESTOR}:{PUERTO_GESTOR}"], value_serializer=lambda v: json.dumps(v).encode('utf-8'))
     topic = 'actualizaciones_taxi'
-    message = {'taxi_id': taxi_id, 'taxi_posicion': posicion, 'viaje_finalizado': finalizado, 'antigua_posicion': antiguaPosicion, 'estado_sensor': estadoSensor}
+    message = {'taxi_id': taxi_id, 'taxi_posicion': posicion, 'viaje_finalizado': finalizado, 'antigua_posicion': antiguaPosicion, 'estado_sensor': estadoSensor, 'token': token}
     producerTAXI.send(topic, message)
     producerTAXI.flush()
     print("POSICION ENVIADA A CENTRAL")
@@ -343,7 +363,7 @@ def actualizarPosicion(destino, mapa, letra):
     return movimiento(posX, posY, destino, mapa, letra)
 
 def validarID(socketCentral):
-    global ubicacion
+    global ubicacion, token
     socketCentral.send(ID_TAXI.encode())
     respuesta = socketCentral.recv(4096)
 
@@ -354,6 +374,7 @@ def validarID(socketCentral):
     else:
         datos = respuesta.decode().strip().replace('<', '').split('>')
         ubicacion = (int(datos[1]), int(datos[2]))
+        token = datos[3]
         print("ID asignado con éxito")
 
 def conectarConServidor():

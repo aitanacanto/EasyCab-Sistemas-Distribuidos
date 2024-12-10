@@ -32,7 +32,7 @@ def actualizar_estado_trafico():
             print(f"Error al obtener el clima: {e}")
             estado_trafico = "KO"
 
-        time.sleep(10)  # Actualizar cada 10 segundos
+        time.sleep(3)
 
 # Ruta para consultar el estado del tráfico
 @app.route("/trafico", methods=["GET"])
