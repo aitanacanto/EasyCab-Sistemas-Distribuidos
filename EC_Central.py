@@ -2,7 +2,7 @@
 import socket
 import sys
 import threading
-import math
+import requests
 import time
 from kafka import KafkaProducer, KafkaConsumer, OffsetAndMetadata
 import json
@@ -10,7 +10,6 @@ import mapaPygame
 from threading import Lock
 
 lock = threading.Lock()
-
 
 ANCHO = 20
 ALTO = 20
@@ -25,20 +24,28 @@ REFRESCO_MAPA = 1
 global viajeTerminado
 viajeTerminado = False
 
-if len(sys.argv) != 4:
+global estadoEmergencia
+estadoEmergencia = False
+
+if len(sys.argv) != 5:
     print("ERROR: Número de argumentos incorrecto")    
-    print("Formato correcto -> python3 EC_Central.py <Puerto escucha> <IP gestor> <Puerto gestor>\n")
+    print("Formato correcto -> python3 EC_Central.py <Puerto escucha> <IP gestor> <Puerto gestor> <IP EC_CTC>\n")
     exit()
 
 argumentos = sys.argv
 PUERTO_ESCUCHA = int(argumentos[1])
 IP_GESTOR = argumentos[2]
 PUERTO_GESTOR = int(argumentos[3])
+IP_CTC = argumentos[4]
+
+estado_trafico = "OK"  # Variable global para el estado del tráfico
 
 ARCHIVO_MAPA = 'mapa.txt'
 ARCHIVO_TAXI = 'taxi.txt'
 ARCHIVO_DESTINOS = 'EC_locations.json'
 DIRECCION = (IP_GESTOR, PUERTO_ESCUCHA)
+
+URL_TRAFICO = f"http://{IP_CTC}:5000/trafico"
 
 global mapa
 global listaEsperaClientes
@@ -47,6 +54,89 @@ listaEsperaClientes = []
 FIN = "<FIN>"
 OK = "OK"
 
+# Cuando se presione el botón en el Mapa, dicho Taxi se írá a la base
+
+################# TEMPERATURA #################
+
+def consultar_estado_trafico():
+    try:
+        respuesta = requests.get(URL_TRAFICO)
+        respuesta.raise_for_status()
+        datos = respuesta.json()
+        return datos.get("estado_trafico", "KO")
+    except requests.exceptions.RequestException as e:
+        print(f"Error al consultar el estado del tráfico: {e}")
+        return "KO"
+
+def verTiempo():
+    while True:
+        estado_trafico = consultar_estado_trafico()
+        print(f"Estado del tráfico: {estado_trafico}")
+
+        if estado_trafico == "KO":
+            print("Tráfico no viable. Enviando taxis a la base.")
+            enviarTodosTaxisBase()
+        else:
+            print("Tráfico viable.")
+
+        time.sleep(10) 
+
+def activarEmergencia():
+    global estadoEmergencia
+
+    estadoEmergencia = True
+    print("Estado de emergencia activado. Todos los taxis deben ir a la base.")
+    enviarTodosTaxisBase()
+
+def verificarEstadoTrafico():
+    global estadoEmergencia
+
+    while True:
+        estado_trafico = consultar_estado_trafico()
+        print(f"Estado del tráfico: {estado_trafico}")
+
+        if estado_trafico == "KO" and not estadoEmergencia:
+            activarEmergencia()
+            
+        if estado_trafico == "OK" and estadoEmergencia:
+            estadoEmergencia = False
+
+        time.sleep(10)  # Consulta periódica
+
+
+################ VUELTA A BASE #################
+
+def enviarTodosTaxisBase():
+    try:
+        with open(ARCHIVO_TAXI, 'r') as archivo:
+            lineas = archivo.readlines()
+
+        for linea in lineas:
+            # Extraer información del taxi
+            datos = linea.strip().replace('<', '').split('>')
+            taxi_id = datos[2]  # ID del taxi
+            taxi_asignado = datos[0]  # "SI" o "NO"
+            taxi_operativo = datos[1]  # "SI" o "NO"
+
+            # Verificar si el taxi está operativo
+            if taxi_asignado == "SI" and taxi_operativo == "SI":
+                vueltaBase(taxi_id)  # Llama a la función para enviar el taxi a la base
+
+    except Exception as e:
+        print(f"Error al procesar los taxis: {e}")
+
+    return 
+
+def vueltaBase(taxi_id):
+    producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
+    topic = 'procesar_viaje'
+    message = {'taxi_id': taxi_id, 'posDestino': (1, 1), 'letraDestino': "Base"}
+    producerTaxi.send(topic, key=taxi_id.encode(), value=message)
+    producerTaxi.flush()
+    print(f"Enviado orden de ir a la BASE al taxi: {taxi_id}")
+
+
+
 #################### KAFKA #####################
 
 def meterEnMapa(pos_x, pos_y, elemento):
@@ -54,27 +144,38 @@ def meterEnMapa(pos_x, pos_y, elemento):
     mapaPygame.actualizar_mapa_pygame(mapa)
 
 def envioMuchasPeticiones(peticion, customerXtaxis, peticionesXtaxis, taxi):
-    global viajeTerminado
-  
+    global viajeTerminado, estadoEmergencia
+
+    print(f"Enviando ordenes al taxi {str(taxi[0])}: {str(peticion)}")
     cambiarEstadoTaxiFichero(taxi[0], "NO")
     
     for unDestino in peticion:
+        # Verificar si hay emergencia
+        if estadoEmergencia:
+            print(f"Emergencia activada. Taxi {taxi[0]} enviado directamente a la base.")
+            vueltaBase(taxi[0])
+            return
+
         enviarMensajeTaxiMapa()
         with lock:
             viajeTerminado = False
             customerXtaxis.append((peticion[0], taxi[0]))
-            peticionesXtaxis.append((peticion,taxi[0]))
+            peticionesXtaxis.append((peticion, taxi[0]))
             meterEnMapa(unDestino[1], unDestino[2], unDestino[0])
-            enviarMensajeTaxiOrden(taxi[0],(unDestino[1], unDestino[2]), unDestino[0])
+            enviarMensajeTaxiOrden(taxi[0], (unDestino[1], unDestino[2]), unDestino[0])
         enviarMensajeTaxiMapa()
         
         while True:
             with lock:
-                if viajeTerminado:
+                if viajeTerminado or estadoEmergencia:
+                    if estadoEmergencia:
+                        print(f"Interrumpiendo viaje. Taxi {taxi[0]} debe ir a la base.")
+                        vueltaBase(taxi[0])
                     break
             time.sleep(0.1)
             
     cambiarEstadoTaxiFichero(taxi[0], "SI")
+
 
 def conexionKafka():
     global listaEsperaClientes, viajeTerminado
@@ -524,7 +625,6 @@ def hayTaxisDisponibles(cliente_x, cliente_y):
 
     return None  # Devuelve None si no hay taxis disponibles
 
-
 def meterTaxisBaseDatos(arrayPos):
     arrayTaxis = []
     for item in arrayPos:
@@ -571,7 +671,7 @@ hiloTaxi.start()
 hiloKafka = threading.Thread(target=conexionKafka)
 hiloKafka.start()
 
-mapaPygame.main_pygame_loop()
+hiloTrafico = threading.Thread(target=verificarEstadoTrafico, daemon=True)
+hiloTrafico.start()
 
-hiloTaxi.join()
-hiloKafka.join()
+mapaPygame.main_pygame_loop()
