@@ -54,8 +54,6 @@ listaEsperaClientes = []
 FIN = "<FIN>"
 OK = "OK"
 
-# Cuando se presione el botón en el Mapa, dicho Taxi se írá a la base
-
 ################# TEMPERATURA #################
 
 def consultar_estado_trafico():
@@ -67,19 +65,6 @@ def consultar_estado_trafico():
     except requests.exceptions.RequestException as e:
         print(f"Error al consultar el estado del tráfico: {e}")
         return "KO"
-
-def verTiempo():
-    while True:
-        estado_trafico = consultar_estado_trafico()
-        print(f"Estado del tráfico: {estado_trafico}")
-
-        if estado_trafico == "KO":
-            print("Tráfico no viable. Enviando taxis a la base.")
-            enviarTodosTaxisBase()
-        else:
-            print("Tráfico viable.")
-
-        time.sleep(10) 
 
 def activarEmergencia():
     global estadoEmergencia
@@ -103,7 +88,6 @@ def verificarEstadoTrafico():
 
         time.sleep(10)  # Consulta periódica
 
-
 ################ VUELTA A BASE #################
 
 def enviarTodosTaxisBase():
@@ -116,10 +100,9 @@ def enviarTodosTaxisBase():
             datos = linea.strip().replace('<', '').split('>')
             taxi_id = datos[2]  # ID del taxi
             taxi_asignado = datos[0]  # "SI" o "NO"
-            taxi_operativo = datos[1]  # "SI" o "NO"
 
             # Verificar si el taxi está operativo
-            if taxi_asignado == "SI" and taxi_operativo == "SI":
+            if taxi_asignado == "SI":
                 vueltaBase(taxi_id)  # Llama a la función para enviar el taxi a la base
 
     except Exception as e:
@@ -128,54 +111,56 @@ def enviarTodosTaxisBase():
     return 
 
 def vueltaBase(taxi_id):
+    global estadoEmergencia
     producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
     topic = 'procesar_viaje'
-    message = {'taxi_id': taxi_id, 'posDestino': (1, 1), 'letraDestino': "Base"}
+    message = {'taxi_id': taxi_id, 'posDestino': (1, 1), 'letraDestino': "Base", 'estadoEmergencia': True}
     producerTaxi.send(topic, key=taxi_id.encode(), value=message)
     producerTaxi.flush()
     print(f"Enviado orden de ir a la BASE al taxi: {taxi_id}")
-
-
 
 #################### KAFKA #####################
 
 def meterEnMapa(pos_x, pos_y, elemento):
     mapa[pos_x][pos_y] = elemento
+    mapa[1][1] = 'X'
     mapaPygame.actualizar_mapa_pygame(mapa)
 
 def envioMuchasPeticiones(peticion, customerXtaxis, peticionesXtaxis, taxi):
-    global viajeTerminado, estadoEmergencia
+    global viajeTerminado, estadoEmergencia, estadoEmergencia
 
     print(f"Enviando ordenes al taxi {str(taxi[0])}: {str(peticion)}")
     cambiarEstadoTaxiFichero(taxi[0], "NO")
     
     for unDestino in peticion:
-        # Verificar si hay emergencia
-        if estadoEmergencia:
-            print(f"Emergencia activada. Taxi {taxi[0]} enviado directamente a la base.")
-            vueltaBase(taxi[0])
-            return
+        if not estadoEmergencia:
+            # Verificar si hay emergencia
+            if estadoEmergencia:
+                print(f"Emergencia activada. Taxi {taxi[0]} enviado directamente a la base.")
+                vueltaBase(taxi[0])
+                return
 
-        enviarMensajeTaxiMapa()
-        with lock:
-            viajeTerminado = False
-            customerXtaxis.append((peticion[0], taxi[0]))
-            peticionesXtaxis.append((peticion, taxi[0]))
-            meterEnMapa(unDestino[1], unDestino[2], unDestino[0])
-            enviarMensajeTaxiOrden(taxi[0], (unDestino[1], unDestino[2]), unDestino[0])
-        enviarMensajeTaxiMapa()
-        
-        while True:
+            enviarMensajeTaxiMapa()
             with lock:
-                if viajeTerminado or estadoEmergencia:
-                    if estadoEmergencia:
-                        print(f"Interrumpiendo viaje. Taxi {taxi[0]} debe ir a la base.")
-                        vueltaBase(taxi[0])
-                    break
-            time.sleep(0.1)
+                viajeTerminado = False
+                customerXtaxis.append((peticion[0], taxi[0]))
+                peticionesXtaxis.append((peticion, taxi[0]))
+                meterEnMapa(unDestino[1], unDestino[2], unDestino[0])
+                enviarMensajeTaxiOrden(taxi[0], (unDestino[1], unDestino[2]), unDestino[0])
+            enviarMensajeTaxiMapa()
+            
+            while True:
+                with lock:
+                    if viajeTerminado or estadoEmergencia:
+                        if estadoEmergencia:
+                            print(f"Interrumpiendo viaje. Taxi {taxi[0]} debe ir a la base.")
+                            vueltaBase(taxi[0])
+                        break
+                time.sleep(0.1)
+        else:
+            cambiarEstadoTaxiFichero(taxi[0], "SI")
             
     cambiarEstadoTaxiFichero(taxi[0], "SI")
-
 
 def conexionKafka():
     global listaEsperaClientes, viajeTerminado
@@ -200,9 +185,9 @@ def conexionKafka():
 
         if arrayPeticiones:
 
-            print("----------------------------------")
+            print("-----------------------------------")
             print("Peticiones: " + str(arrayPeticiones))
-            print("----------------------------------")
+            print("-----------------------------------")
 
             for peticion in arrayPeticiones:
                 
@@ -256,9 +241,10 @@ def enviarMensajeTaxiMapa():
     print("Mapa actualizado enviado")
     
 def enviarMensajeTaxiOrden(taxi_id, destino, letraDestino):
+    global estadoEmergencia
     producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
     topic = 'procesar_viaje'
-    message = {'taxi_id': taxi_id, 'posDestino': destino, 'letraDestino': letraDestino}
+    message = {'taxi_id': taxi_id, 'posDestino': destino, 'letraDestino': letraDestino, 'estadoEmergencia': estadoEmergencia}
     producerTaxi.send(topic, key=taxi_id.encode(), value=message)
     producerTaxi.flush()
     print("Enviado orden de viaje al Taxi " + str(taxi_id))

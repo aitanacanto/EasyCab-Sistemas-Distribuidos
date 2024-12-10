@@ -171,7 +171,6 @@ def procesar_formulario(lista_destinos):
 
     hiloRecibirMensajes = threading.Thread(target=mensajeriaConCentral)
     hiloRecibirMensajes.start()
-    hiloRecibirMensajes.join()
 
 # Crear la ventana principal
 ventana = tk.Tk()

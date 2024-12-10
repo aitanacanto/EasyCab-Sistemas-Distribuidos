@@ -62,6 +62,8 @@ def dibujar_mapa(mapa_data):
                     color = COLOR_FONDO
                     texto = ''
 
+                mapa_data[1][1] = 'X'
+
                 # Dibujar la celda con el color correspondiente
                 pygame.draw.rect(screen, color, rect)
                 pygame.draw.rect(screen, COLOR_BORDE, rect, ANCHO_BORDE)

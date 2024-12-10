@@ -46,6 +46,9 @@ mapa = None
 permisoMovimiento = False
 mapa_lock = threading.Lock()
 
+global estadoEmergencia
+estadoEmergencia = False
+
 # Consumidor de Kafka para actualizaciones del mapa (reutilizable)
 consumer_actualizacion_mapa = KafkaConsumer(
     'actualizar_mapa',
@@ -55,6 +58,47 @@ consumer_actualizacion_mapa = KafkaConsumer(
     enable_auto_commit=False,
     group_id=f'taxi_{ID_TAXI}'  # Asegurar un group_id único para cada instancia
 )
+
+####### ESTADO DE EMERGENCIA #######
+
+def comprobarEstadoAlarma():
+    global destino, letraUbicacion, estadoEmergencia
+
+    while True:       
+        time.sleep(1) 
+        print("Comprobando Estado de Emergencia")
+        group_id = f"taxi_group_{ID_TAXI}"
+        consumer = KafkaConsumer(
+            'procesar_viaje',
+            bootstrap_servers=[f"{IP_GESTOR}:{PUERTO_GESTOR}"],
+            value_deserializer=lambda v: json.loads(v.decode('utf-8')),
+            auto_offset_reset='earliest',
+            enable_auto_commit=False,
+            group_id=group_id
+        )
+
+        try:
+            messages = consumer.poll(timeout_ms=1000) 
+
+            if not(not messages or stop_event.is_set()):
+                for topic_partition, msgs in messages.items():
+                    for message in msgs:
+                        info = message.value
+                        print("Mensaje recibido con ID: " + info['taxi_id'])
+                        key = message.key.decode('utf-8') if message.key else None
+                        estadoEmergenciaa = info['estadoEmergencia']
+                        if estadoEmergenciaa:
+                            print("VOLVER A BASE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                            destino = (1,1)
+                            estadoEmergencia = True
+                            if key == ID_TAXI or info['taxi_id'] == ID_TAXI:
+                                consumer.commit({topic_partition: OffsetAndMetadata(message.offset + 1, None)})
+                            
+        except Exception as e:
+            print(f"Error al recibir la orden del servicio: {e}")
+            traceback.print_exc()
+        finally:
+            consumer.close() 
 
 ############ FUNCIONES #############
 
@@ -72,9 +116,12 @@ def mostrarMapa(mapa):
 
 def realizarViaje():
     while not stop_event.is_set():  # Revisa stop_event en cada ciclo
-        global permisoMovimiento, clienteDentro, ubicacion, destino, mapa, letraUbicacion
+        global permisoMovimiento, clienteDentro, ubicacion, destino, mapa, letraUbicacion, estadoEmergencia
 
         if permisoMovimiento:
+            if estadoEmergencia:
+                print("VOLVIENDO A BASE!!")
+                
             mostrarMapa(mapa)
             antiguaPosicion = ubicacion
 
@@ -140,8 +187,7 @@ def recibirActualizacionMapa():
     return False
 
 def recibirPosicionCliente():
-    global destino, letraUbicacion
-
+    global destino, letraUbicacion, estadoEmergencia
     with lock:
         # Consumidor para procesar el viaje (cada taxi debe tener un group_id único)
         group_id = f"taxi_group_{ID_TAXI}"
@@ -166,10 +212,16 @@ def recibirPosicionCliente():
                     print("Mensaje recibido con ID: " + info['taxi_id'])
                     key = message.key.decode('utf-8') if message.key else None
                     if key == ID_TAXI or info['taxi_id'] == ID_TAXI:
-                        destino = info['posDestino']
+                        estadoEmergencia = info['estadoEmergencia']
                         letraUbicacion = info['letraDestino']
                         consumer.commit({topic_partition: OffsetAndMetadata(message.offset + 1, None)})
                         print("RECIBIDO ORDEN DE VIAJE")
+                        
+                        if estadoEmergencia:
+                            destino = (1,1)
+                        else:
+                            destino = info['posDestino']
+                            
                         return True
         except Exception as e:
             print(f"Error al recibir la orden del servicio: {e}")
@@ -320,8 +372,8 @@ hiloSensor.start()
 hiloKafka = threading.Thread(target=cerebroDigitalEngine)
 hiloKafka.start()
 
-hiloSensor.join()
-hiloKafka.join()
+hiloEstadoAlarma = threading.Thread(target=comprobarEstadoAlarma)
+hiloEstadoAlarma.start()
 
 if stop_event.is_set():
     consumer_actualizacion_mapa.close()

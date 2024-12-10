@@ -94,5 +94,3 @@ hilo_envio.start()
 
 # Iniciar el bucle principal de la aplicación
 root.mainloop()
-
-hilo_envio.join()
