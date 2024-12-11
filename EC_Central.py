@@ -214,6 +214,8 @@ def conexionKafka():
 
     peticionesXtaxis = []
     customerXtaxis = []
+    
+    destino = ""
 
     while True:
 
@@ -278,6 +280,7 @@ def conexionKafka():
                 cambiarPosicionTaxiMapa(movimientoTaxi[0], movimientoTaxi[1], movimientoTaxi[3], movimientoTaxi[4])
                 actualizarPosicionTaxiFichero(movimientoTaxi[0], movimientoTaxi[1], movimientoTaxi[2], movimientoTaxi[4])
                 enviarMensajeTaxiMapa()
+
 
 def enviarMensajeTaxiMapa():
     global mapa
@@ -575,14 +578,14 @@ def existeMismaID(customer_id):
                 return True
     return False
 
-def cambiarPosicionTaxiMapa(taxi_id, taxi_posicion, antigua_posicion, estado_sensor, destino):
+def cambiarPosicionTaxiMapa(taxi_id, taxi_posicion, antigua_posicion, estado_sensor):
     mapa[antigua_posicion[0]][antigua_posicion[1]] = ' '
     if estado_sensor == OK:
         mapa[taxi_posicion[0]][taxi_posicion[1]] = f"{taxi_id}v"
     else:
         mapa[taxi_posicion[0]][taxi_posicion[1]] = f"{taxi_id}r"
 
-    estado_taxi = leerEstadosDeTaxis(estado_sensor, destino)
+    estado_taxi = leerEstadosDeTaxis(estado_sensor, "")
     mapaPygame.actualizar_mapa_pygame(mapa, estado_taxi, OK)
 
 ################## BASE DE DATOS ##################
