@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 import os
+import traceback
 
 app = Flask(__name__)
 
@@ -72,9 +73,6 @@ def register_taxi():
     except Exception as e:
         return jsonify({"error": f"Error al registrar taxi: {e}"}), 500
 
-from flask import Flask, request, jsonify
-import os
-
 app = Flask(__name__)
 
 # Archivo existente de taxis
@@ -85,8 +83,6 @@ if not os.path.exists(ARCHIVO_TAXI):
     with open(ARCHIVO_TAXI, "w") as archivo:
         archivo.write("")  # Crear un archivo vacío
 
-
-# Leer el archivo de taxis
 def leer_taxis():
     taxis = []
     try:
@@ -101,12 +97,12 @@ def leer_taxis():
                         "pos_x": int(datos[3]),
                         "pos_y": int(datos[4])
                     })
+    except FileNotFoundError:
+        print("Archivo de taxis no encontrado, se creará uno nuevo.")
     except Exception as e:
         print(f"Error al leer el archivo de taxis: {e}")
     return taxis
 
-
-# Guardar en el archivo de taxis
 def guardar_taxis(taxis):
     try:
         with open(ARCHIVO_TAXI, "w") as archivo:
@@ -115,10 +111,22 @@ def guardar_taxis(taxis):
     except Exception as e:
         print(f"Error al guardar en el archivo de taxis: {e}")
 
+def borrar_taxi(taxi_id):
+    taxis = leer_taxis()
+    with open(ARCHIVO_TAXI, "w") as archivo:
+            for taxi in taxis:
+                if taxi['taxi'] == taxi_id:
+                    archivo.write(f"<NO><NO><{taxi['taxi_id']}><{taxi['pos_x']}><{taxi['pos_y']}>\n")
+                else:
+                    archivo.write(f"<{taxi['asignado']}><{taxi['operativo']}><{taxi['taxi_id']}><{taxi['pos_x']}><{taxi['pos_y']}>\n")
 
 @app.route("/register_taxi", methods=["POST"])
 def register_taxi():
     try:
+        # Validar que se envían datos JSON
+        if not request.json:
+            return jsonify({"error": "No se enviaron datos JSON"}), 400
+
         # Obtener datos del taxi del cuerpo de la solicitud
         data = request.json
         taxi_id = data.get("taxi_id")
@@ -134,39 +142,49 @@ def register_taxi():
         # Verificar si el taxi ya está registrado
         for taxi in taxis:
             if taxi["taxi_id"] == taxi_id:
-                return jsonify({"error": f"El taxi {taxi_id} ya está registrado"}), 400
+                # Si está activo, rechazar el registro
+                if taxi["asignado"] == "SI" and taxi["operativo"] == "SI":
+                    return jsonify({"error": f"El taxi {taxi_id} ya está registrado y operativo"}), 400
 
-        # Agregar el nuevo taxi
-        nuevo_taxi = {"asignado": "NO", "operativo": "NO", "taxi_id": taxi_id, "pos_x": pos_x, "pos_y": pos_y}
-        taxis.append(nuevo_taxi)
-        guardar_taxis(taxis)
+                # Si está inactivo, actualizar estado y posición
+                taxi["asignado"] = "SI"
+                taxi["operativo"] = "SI"
+                taxi["pos_x"] = pos_x
+                taxi["pos_y"] = pos_y
 
-        return jsonify({"mensaje": f"Taxi {taxi_id} registrado con éxito", "taxi": nuevo_taxi}), 201
+                # Guardar los cambios en el archivo
+                guardar_taxis(taxis)
+                return jsonify({"mensaje": f"Taxi {taxi_id} actualizado y está operativo"}), 200
+
+        # Si no está registrado, devolver error
+        return jsonify({"error": f"El taxi {taxi_id} no existe en la base de datos"}), 404
 
     except Exception as e:
+        print(f"Error durante el registro del taxi: {e}")
         return jsonify({"error": f"Error al registrar taxi: {e}"}), 500
 
-
-@app.route("/unregister_taxi/<taxi_id>", methods=["DELETE"])
+@app.route("/unregister_taxi/<taxi_id>", methods=["POST"])
 def unregister_taxi(taxi_id):
     try:
         # Leer el archivo de taxis
         taxis = leer_taxis()
+    
+        taxi_encontrado = False
+        for taxi in taxis:
+            if taxi["taxi_id"] == taxi_id:
+                taxi_encontrado = True
 
-        # Filtrar el taxi que debe ser eliminado
-        taxis_actualizados = [taxi for taxi in taxis if taxi["taxi_id"] != taxi_id]
+        if not taxi_encontrado:
+            return jsonify({"error": f"El taxi {taxi_id} no existe en la base de datos"}), 404
 
-        if len(taxis) == len(taxis_actualizados):
-            return jsonify({"error": f"Taxi {taxi_id} no encontrado"}), 404
+        # Guardar los cambios en el archivo
+        borrar_taxi(taxi_id)
 
-        # Guardar los cambios
-        guardar_taxis(taxis_actualizados)
-
-        return jsonify({"mensaje": f"Taxi {taxi_id} dado de baja con éxito"}), 200
+        return jsonify({"mensaje": f"Taxi {taxi_id} desconectado correctamente"}), 200
 
     except Exception as e:
-        return jsonify({"error": f"Error al dar de baja taxi: {e}"}), 500
-
+        print(f"Error al desconectar taxi: {e}")
+        return jsonify({"error": f"Error al desconectar taxi: {e}"}), 500
 
 @app.route("/list_taxis", methods=["GET"])
 def list_taxis():
@@ -175,7 +193,6 @@ def list_taxis():
         return jsonify({"taxis": taxis}), 200
     except Exception as e:
         return jsonify({"error": f"Error al obtener la lista de taxis: {e}"}), 500
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001)

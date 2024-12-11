@@ -164,17 +164,16 @@ def vueltaBase(taxi_id):
     producerTaxi.send(topic, key=taxi_id.encode(), value=message)
     producerTaxi.flush()
     print(f"Enviado orden de ir a la BASE al taxi: {taxi_id}")
-    borrarLineaTokens(taxi_id)
 
 #################### KAFKA #####################
 
 def meterEnMapa(pos_x, pos_y, elemento, estado_taxi):
     mapa[pos_x][pos_y] = elemento
+    mapa[1][1] = 'X'
     mapaPygame.actualizar_mapa_pygame(mapa, estado_taxi, "OK")
 
-
 def envioMuchasPeticiones(peticion, customerXtaxis, peticionesXtaxis, taxi):
-    global viajeTerminado, estadoEmergencia, estadoEmergencia
+    global viajeTerminado, estadoEmergencia
 
     print(f"Enviando ordenes al taxi {str(taxi[0])}: {str(peticion)}")
     cambiarEstadoTaxiFichero(taxi[0], "NO")
@@ -305,6 +304,8 @@ def enviarMensajeCustomer(codigoMensaje, customerID, mensaje):
     producerCustomer.flush()
 
 def recibirMensajeTaxi():
+    global estadoEmergencia
+    
     consumer = KafkaConsumer(
         'actualizaciones_taxi',
         bootstrap_servers='localhost:9092',
@@ -340,6 +341,8 @@ def recibirMensajeTaxi():
                         print(f"Token válido para taxi {taxi_id}. Procesando mensaje.")
                         peticion = (taxi_id, taxi_posicion, viaje_finalizado, antigua_posicion, estado_sensor)
                         peticiones.append(peticion)
+                        if taxi_posicion == (1,1) and estadoEmergencia:
+                            borrarLineaTokens(taxi_id)
                     else:
                         print(f"Token inválido para taxi {taxi_id}. Ignorando mensaje.")
 
@@ -385,6 +388,32 @@ def obtener_lista_ubicaciones(ruta_archivo, lista_letras):
     estados_actualizados = leerEstadosDeTaxis(OK, letra) 
     return solucion
 
+def leerEstadosDeTaxis(estado, destino):
+    
+    estados = []
+    with open(ARCHIVO_TAXI, 'r') as archivo:
+        lineas = archivo.readlines()
+
+    if not lineas:
+        return None
+
+    for linea in lineas:
+        datos = linea.strip().replace('<', '').split('>')
+
+        if len(datos) >= 5:
+            taxi_asignado = datos[0]
+            taxi_id = datos[2]
+            
+            if taxi_asignado == "SI":
+                solicitud = {
+                    "id": taxi_id,
+                    "destino": destino,            # Implementar para poner el destino al que va
+                    "estado": estado
+                }
+            
+                estados.append(solicitud)
+
+    return estados
 
 def recibirPeticionesCustomers():
     consumer = KafkaConsumer(
@@ -477,8 +506,6 @@ def validarUbicacion(id_taxi, conn):
                 nuevo_token = generar_token()
                 if taxi_asignado == "NO" and taxi_operativo == "NO":
                     taxiEncontrado = True
-                    nueva_linea = f"<SI><SI><{taxi_id}><{datos[3]}><{datos[4]}>\n"
-                    nuevasLineas.append(nueva_linea)
                     mensaje = "<" + OK + "><"+ datos[3] + "><" + datos[4] + "><" + nuevo_token + ">"
                     conn.send(mensaje.encode(FORMAT))
                     
@@ -494,9 +521,6 @@ def validarUbicacion(id_taxi, conn):
         if not taxiEncontrado:
             conn.send(FIN.encode(FORMAT))
             return
-
-        with open(ARCHIVO_TAXI, 'w') as archivo:
-            archivo.writelines(nuevasLineas)
             
     except Exception as e:
         print(f"EXCEPCIÓN ---> No se ha podido comunicar con el taxi: {e}")
@@ -551,36 +575,8 @@ def existeMismaID(customer_id):
                 return True
     return False
 
-def leerEstadosDeTaxis(estado, destino):
-    
-    estados = []
-    with open(ARCHIVO_TAXI, 'r') as archivo:
-        lineas = archivo.readlines()
-
-    if not lineas:
-        return None
-
-    for linea in lineas:
-        datos = linea.strip().replace('<', '').split('>')
-
-        if len(datos) >= 5:
-            taxi_asignado = datos[0]
-            taxi_id = datos[2]
-            
-            if taxi_asignado == "SI":
-                solicitud = {
-                    "id": taxi_id,
-                    "destino": destino,            # Implementar para poner el destino al que va
-                    "estado": estado
-                }
-            
-                estados.append(solicitud)
-
-    return estados
-
 def cambiarPosicionTaxiMapa(taxi_id, taxi_posicion, antigua_posicion, estado_sensor, destino):
     mapa[antigua_posicion[0]][antigua_posicion[1]] = ' '
-    
     if estado_sensor == OK:
         mapa[taxi_posicion[0]][taxi_posicion[1]] = f"{taxi_id}v"
     else:
@@ -588,7 +584,6 @@ def cambiarPosicionTaxiMapa(taxi_id, taxi_posicion, antigua_posicion, estado_sen
 
     estado_taxi = leerEstadosDeTaxis(estado_sensor, destino)
     mapaPygame.actualizar_mapa_pygame(mapa, estado_taxi, OK)
-
 
 ################## BASE DE DATOS ##################
 
@@ -653,7 +648,7 @@ def actualizarPosicionTaxiFichero(id_taxi, posicion, finalizado, estadoSensor):
                     taxi_y = str(nuevo_y)
                     taxiActualizado = True
 
-                    if finalizado:
+                    if finalizado and not posicion == (1,1):
                         nueva_linea = f"<SI><SI><{taxi_id}><{taxi_x}><{taxi_y}>\n"
                     elif estadoSensor == FIN:
                         nueva_linea = f"<NO><NO><{taxi_id}><{taxi_x}><{taxi_y}>\n"

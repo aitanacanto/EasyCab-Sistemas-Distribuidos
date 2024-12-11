@@ -92,7 +92,7 @@ def comprobarEstadoAlarma():
                         key = message.key.decode('utf-8') if message.key else None
                         estadoEmergenciaa = info['estadoEmergencia']
                         if estadoEmergenciaa:
-                            print("VOLVER A BASE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                            print("VOLVER A BASE!!!!!!!!")
                             destino = (1,1)
                             estadoEmergencia = True
                             if key == ID_TAXI or info['taxi_id'] == ID_TAXI:
@@ -133,20 +133,23 @@ def realizarViaje():
             
             print(f"Destino --> {str(destino[0])}, {str(destino[1])}")
             
-            if ubicacion[0] == 1 and ubicacion[1] == 1:
-                # Llamar a EC_Registry para desconectar el taxi
+            if ubicacion[0] == 1 and ubicacion[1] == 1 and estadoEmergencia:
                 try:
-                    url = f"http://<IP_EC_Registry>:5001/unregister_taxi/{ID_TAXI}"
-                    response = requests.delete(url)
-                    
+                    url = f"http://localhost:5001/unregister_taxi/{ID_TAXI}"
+                    print(f"Enviando solicitud de desconexión para el taxi {ID_TAXI}...")
+                    response = requests.post(url)
+
+                    print(f"Estado HTTP: {response.status_code}")
+                    print(f"Contenido de la respuesta: {response.text}")
+
                     if response.status_code == 200:
                         print(f"Taxi {ID_TAXI} desconectado correctamente en EC_Registry.")
                     else:
-                        print(f"Error al desconectar el taxi {ID_TAXI}: {response.json()}")
+                        print(f"Error al desconectar el taxi {ID_TAXI}. Respuesta: {response.json()}")
 
                 except requests.exceptions.RequestException as e:
                     print(f"Error al comunicarse con EC_Registry: {e}")
-                break
+                    sys.exit(1)
             
             if ubicacion[0] == destino[0] and ubicacion[1] == destino[1]:
                 enviarPosicionTaxi(ID_TAXI, ubicacion, antiguaPosicion, True, OK)
@@ -362,6 +365,32 @@ def actualizarPosicion(destino, mapa, letra):
 
     return movimiento(posX, posY, destino, mapa, letra)
 
+def registrar_taxi_en_registry(taxi_id, pos_x, pos_y):
+    try:
+        url = f"http://localhost:5001/register_taxi"
+        payload = {
+            "taxi_id": taxi_id,
+            "pos_x": pos_x,
+            "pos_y": pos_y
+        }
+
+        print(f"Enviando datos a EC_Registry: {payload}")
+        response = requests.post(url, json=payload)
+
+        print(f"Estado HTTP: {response.status_code}")
+        print(f"Respuesta del servidor: {response.text}")
+
+        if response.status_code == 201:
+            print(f"Taxi {taxi_id} registrado con éxito en EC_Registry.")
+        elif response.status_code == 200:
+            print(f"Taxi {taxi_id} actualizado correctamente en EC_Registry.")
+        else:
+            print(f"Error al registrar el taxi {taxi_id}. Respuesta: {response.json()}")
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error al comunicarse con EC_Registry: {e}")
+        sys.exit(1)
+
 def validarID(socketCentral):
     global ubicacion, token
     socketCentral.send(ID_TAXI.encode())
@@ -376,6 +405,8 @@ def validarID(socketCentral):
         ubicacion = (int(datos[1]), int(datos[2]))
         token = datos[3]
         print("ID asignado con éxito")
+
+        registrar_taxi_en_registry(ID_TAXI, ubicacion[0], ubicacion[1])
 
 def conectarConServidor():
     global socketCentral
