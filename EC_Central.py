@@ -7,6 +7,8 @@ import time
 import secrets
 from kafka import KafkaProducer, KafkaConsumer, OffsetAndMetadata
 import json
+from flask import Flask, jsonify
+from flask_cors import CORS
 import mapaPygame
 from threading import Lock
 
@@ -731,6 +733,42 @@ def leerMapaFichero():
                 print(f"Línea malformada: {linea}")
 
     return arrayPos
+
+
+# Inicializa la aplicación Flask
+app = Flask(__name__)
+CORS(app)
+
+
+@app.route('/api/mapa', methods=['GET'])
+def get_mapa():
+    """Devuelve el estado actual del mapa como JSON."""
+    with lock:  # Aseguramos acceso concurrente seguro al mapa
+        return jsonify({"mapa": mapa})
+
+@app.route('/api/actualizar_mapa', methods=['POST'])
+def actualizar_mapa():
+    """Recibe actualizaciones para el mapa."""
+    datos = request.get_json()
+    if not datos or 'x' not in datos or 'y' not in datos or 'valor' not in datos:
+        return jsonify({"error": "Formato inválido"}), 400
+
+    x, y, valor = datos['x'], datos['y'], datos['valor']
+    with lock:  # Protege el acceso al mapa
+        try:
+            mapa[x][y] = valor
+            return jsonify({"status": "Mapa actualizado"}), 200
+        except IndexError:
+            return jsonify({"error": "Coordenadas fuera de rango"}), 400
+
+def iniciar_flask():
+    """Inicia el servidor Flask."""
+    app.run(debug=True, port=4321, use_reloader=False)  # `use_reloader` evita duplicar hilos
+
+# En EC_Central, añade esta línea antes de iniciar Pygame
+hilo_flask = threading.Thread(target=iniciar_flask, daemon=True)
+hilo_flask.start()
+
 
 arrayPos = leerMapaFichero()
 meterTaxisBaseDatos(arrayPos)

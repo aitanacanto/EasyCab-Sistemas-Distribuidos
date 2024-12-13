@@ -96,28 +96,29 @@ def dibujar_tabla_estados(estados_taxis, estados_clientes):
     y_offset = 40
     botones_taxis = []
 
-    for estado in estados_taxis:
-        texto = f"Id: {estado['id']}, Destino: {estado['destino']}, Estado: {estado['estado']}"
-        estado_surface = font.render(texto, True, COLOR_TEXTO)
-        screen.blit(estado_surface, (10, y_offset))
+    if estados_taxis:
+        for estado in estados_taxis:
+            texto = f"Id: {estado['id']}, Destino: {estado['destino']}, Estado: {estado['estado']}"
+            estado_surface = font.render(texto, True, COLOR_TEXTO)
+            screen.blit(estado_surface, (10, y_offset))
 
-        boton_rect = pygame.Rect(300, y_offset - 5, 150, 20)
-        pygame.draw.rect(screen, COLOR_AMARILLO, boton_rect)
-        boton_texto = font.render("Volver a la base", True, COLOR_TEXTO)
-        screen.blit(boton_texto, (boton_rect.x + 5, boton_rect.y))
-        botones_taxis.append((boton_rect, estado['id']))
+            boton_rect = pygame.Rect(300, y_offset - 5, 150, 20)
+            pygame.draw.rect(screen, COLOR_AMARILLO, boton_rect)
+            boton_texto = font.render("Volver a la base", True, COLOR_TEXTO)
+            screen.blit(boton_texto, (boton_rect.x + 5, boton_rect.y))
+            botones_taxis.append((boton_rect, estado['id']))
 
-        y_offset += 30
+            y_offset += 30
 
-    # Dibujar estados de clientes
-    """
-    y_offset = 40
-    for estado in estados_clientes:
-        texto = f"Id: {estado['id']}, Destino: {estado['destino']}, Estado: {estado['estado']}"
-        estado_surface = font.render(texto, True, COLOR_TEXTO)
-        screen.blit(estado_surface, (ANCHO_VENTANA // 2, y_offset))
-        y_offset += 20
-    """
+        # Dibujar estados de clientes
+        """
+        y_offset = 40
+        for estado in estados_clientes:
+            texto = f"Id: {estado['id']}, Destino: {estado['destino']}, Estado: {estado['estado']}"
+            estado_surface = font.render(texto, True, COLOR_TEXTO)
+            screen.blit(estado_surface, (ANCHO_VENTANA // 2, y_offset))
+            y_offset += 20
+        """
 def manejar_eventos_botones(evento, botones_taxis):
     """
     if evento.type == pygame.MOUSEBUTTONDOWN:
