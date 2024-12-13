@@ -164,7 +164,6 @@ def vueltaBase(taxi_id):
     producerTaxi.send(topic, key=taxi_id.encode(), value=message)
     producerTaxi.flush()
     print(f"Enviado orden de ir a la BASE al taxi: {taxi_id}")
-    borrarLineaTokens(taxi_id)
 
 #################### KAFKA #####################
 
@@ -174,7 +173,7 @@ def meterEnMapa(pos_x, pos_y, elemento):
     mapaPygame.actualizar_mapa_pygame(mapa)
 
 def envioMuchasPeticiones(peticion, customerXtaxis, peticionesXtaxis, taxi):
-    global viajeTerminado, estadoEmergencia, estadoEmergencia
+    global viajeTerminado, estadoEmergencia
 
     print(f"Enviando ordenes al taxi {str(taxi[0])}: {str(peticion)}")
     cambiarEstadoTaxiFichero(taxi[0], "NO")
@@ -304,6 +303,8 @@ def enviarMensajeCustomer(codigoMensaje, customerID, mensaje):
     producerCustomer.flush()
 
 def recibirMensajeTaxi():
+    global estadoEmergencia
+    
     consumer = KafkaConsumer(
         'actualizaciones_taxi',
         bootstrap_servers='localhost:9092',
@@ -339,6 +340,8 @@ def recibirMensajeTaxi():
                         print(f"Token válido para taxi {taxi_id}. Procesando mensaje.")
                         peticion = (taxi_id, taxi_posicion, viaje_finalizado, antigua_posicion, estado_sensor)
                         peticiones.append(peticion)
+                        if taxi_posicion == (1,1) and estadoEmergencia:
+                            borrarLineaTokens(taxi_id)
                     else:
                         print(f"Token inválido para taxi {taxi_id}. Ignorando mensaje.")
 
@@ -472,8 +475,6 @@ def validarUbicacion(id_taxi, conn):
                 nuevo_token = generar_token()
                 if taxi_asignado == "NO" and taxi_operativo == "NO":
                     taxiEncontrado = True
-                    nueva_linea = f"<SI><SI><{taxi_id}><{datos[3]}><{datos[4]}>\n"
-                    nuevasLineas.append(nueva_linea)
                     mensaje = "<" + OK + "><"+ datos[3] + "><" + datos[4] + "><" + nuevo_token + ">"
                     conn.send(mensaje.encode(FORMAT))
                     
@@ -489,9 +490,6 @@ def validarUbicacion(id_taxi, conn):
         if not taxiEncontrado:
             conn.send(FIN.encode(FORMAT))
             return
-
-        with open(ARCHIVO_TAXI, 'w') as archivo:
-            archivo.writelines(nuevasLineas)
             
     except Exception as e:
         print(f"EXCEPCIÓN ---> No se ha podido comunicar con el taxi: {e}")
@@ -620,7 +618,7 @@ def actualizarPosicionTaxiFichero(id_taxi, posicion, finalizado, estadoSensor):
                     taxi_y = str(nuevo_y)
                     taxiActualizado = True
 
-                    if finalizado:
+                    if finalizado and not posicion == (1,1):
                         nueva_linea = f"<SI><SI><{taxi_id}><{taxi_x}><{taxi_y}>\n"
                     elif estadoSensor == FIN:
                         nueva_linea = f"<NO><NO><{taxi_id}><{taxi_x}><{taxi_y}>\n"

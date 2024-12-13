@@ -1,3 +1,5 @@
 /.venv
 taxi.txt
 __pycache__/
+/entorno/
+/myenv/
