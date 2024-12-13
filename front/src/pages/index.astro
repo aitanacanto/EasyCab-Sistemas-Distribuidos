@@ -1,0 +1,109 @@
+---
+import Layout from '../layouts/Layout.astro';
+import RealTimeMap from '../components/RealTimeMap.jsx';
+---
+
+<Layout>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      background: linear-gradient(to bottom, #1f4037, #99f2c8);
+      color: #fff;
+      margin: 0;
+      padding: 0;
+    }
+
+    .header {
+      text-align: center;
+      padding: 20px;
+      background-color: #ff4500;
+      color: white;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+    }
+
+    .header h1 {
+      font-size: 3rem;
+      margin: 0;
+    }
+
+    .header p {
+      font-size: 1.2rem;
+      margin: 10px 0 0;
+    }
+
+    .content {
+      display: flex;
+      justify-content: space-around;
+      flex-wrap: wrap;
+      padding: 20px;
+    }
+
+    .card {
+      background: #ffffff;
+      color: #333;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      padding: 20px;
+      margin: 10px;
+      width: 300px;
+      text-align: center;
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+
+    .card:hover {
+      transform: scale(1.05);
+      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    .card h3 {
+      color: #ff4500;
+      margin-bottom: 10px;
+    }
+
+    .footer {
+      text-align: center;
+      padding: 10px;
+      background-color: #1f4037;
+      color: #fff;
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+    }
+  </style>
+
+  <div class="header">
+    <h1>Sistema de Gestión EasyCab Release</h1>
+    <p>Autores: Aitana Cantó Rico & Levan Kipiani</p>
+  </div>
+
+  <div class="content">
+
+	<div class="card">
+		<h3>Mapa Interactivo</h3>
+		<p>Visualiza todas las operaciones y movimiento de los taxis en el mapa en tiempo real.</p>
+	  <RealTimeMap />
+  </div>
+
+    <div class="card">
+      <h3>Seguimiento de Taxis en Tiempo Real</h3>
+      <p>Monitorea las ubicaciones, estados y disponibilidad de los taxis en tiempo real.</p>
+    </div>
+
+	<div class="card">
+		<h3>Solicitudes de Clientes</h3>
+		<p>Gestiona y responde eficientemente a las solicitudes de viaje.</p>
+	  </div>
+
+  <div class="card">
+    <h3>Documentación</h3>
+    <p>Documentación del sistema y guía de despliegue.</p>
+    </div>
+
+
+
+  </div>
+
+  <div class="footer">
+    <p>&copy; 2024 EasyCab. Todos los derechos reservados.</p>
+  </div>
+</Layout>
