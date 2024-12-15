@@ -173,7 +173,7 @@ def meterEnMapa(pos_x, pos_y, elemento, estado_taxi):
     mapa[pos_x][pos_y] = elemento
     mapa[1][1] = 'X'
     mapaPygame.actualizar_mapa_pygame(mapa, estado_taxi, "OK")
-    enviar_mapa_a_api(mapa)
+    
 
 def envioMuchasPeticiones(peticion, customerXtaxis, peticionesXtaxis, taxi):
     global viajeTerminado, estadoEmergencia
@@ -291,7 +291,7 @@ def enviarMensajeTaxiMapa():
         producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
         producerTaxi.send('actualizar_mapa', value=mapa)
         producerTaxi.flush()
-    print("Mapa actualizado enviado")
+
     
 def enviarMensajeTaxiOrden(taxi_id, destino, letraDestino):
     global estadoEmergencia
@@ -590,7 +590,7 @@ def cambiarPosicionTaxiMapa(taxi_id, taxi_posicion, antigua_posicion, estado_sen
 
     estado_taxi = leerEstadosDeTaxis(estado_sensor, "")
     mapaPygame.actualizar_mapa_pygame(mapa, estado_taxi, OK)
-    enviar_mapa_a_api(mapa)
+
 
 ################## BASE DE DATOS ##################
 
@@ -742,45 +742,26 @@ app = Flask(__name__)
 CORS(app)
 
 
-def enviar_mapa_a_api(mapa):
-    """Envía el estado del mapa al servidor Flask."""
-    try:
-        # Se envía el mapa como JSON
-        respuesta = requests.post("http://localhost:4321/api/actualizar_mapa", json={"mapa": mapa})
-        
-        # Verificar la respuesta
-        if respuesta.status_code == 200:
-            print("Mapa enviado correctamente")
-        else:
-            print("Error al actualizar el mapa:", respuesta.json())
-    except requests.exceptions.RequestException as e:
-        print(f"Error al conectar con la API: {e}")
-
-        
-@app.route('/api/actualizar_mapa', methods=['POST'])
-def actualizar_mapa():
-    """Recibe el mapa y lo guarda en la variable global."""
-    datos = request.get_json()
-    if 'mapa' not in datos:
-        return jsonify({"error": "Formato inválido"}), 400
-    
+@app.route('/api/mapa', methods=['GET'])
+def obtener_mapa():
+    global mapa
     with lock:
-        global mapa
-        mapa = datos['mapa']  # Actualiza el mapa global con los datos recibidos
-    
-    return jsonify({"status": "Mapa actualizado"}), 200
+        print("Mapa", mapa)
+        return jsonify({"mapa": mapa}), 200
 
 def iniciar_flask():
     """Inicia el servidor Flask."""
     app.run(debug=True, port=4321, use_reloader=False)
 
+# Hilo para ejecutar el servidor Flask en paralelo
+hilo_flask = threading.Thread(target=iniciar_flask, daemon=True)
+hilo_flask.start()
 
 arrayPos = leerMapaFichero()
 meterTaxisBaseDatos(arrayPos)
 inicMapa(arrayPos)
 
 print("[EMPEZANDO] Servidor inicializando...")
-print (mapa)
 
 mapaPygame.iniciar_pygame(ANCHO, ALTO)
 
@@ -792,8 +773,5 @@ hiloKafka.start()
 
 hiloTrafico = threading.Thread(target=verificarEstadoTrafico, daemon=True)
 hiloTrafico.start()
-
-hilo_flask = threading.Thread(target=iniciar_flask, daemon=True)
-hilo_flask.start()
 
 mapaPygame.main_pygame_loop()
