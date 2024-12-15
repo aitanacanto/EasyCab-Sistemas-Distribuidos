@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mapa en Cuadrícula</title>
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      background-color: #f3f3f3;
+    }
+
+    .map-container {
+      display: grid;
+      grid-template-columns: repeat(20, 30px); /* 20 columnas de 30px */
+      grid-template-rows: repeat(20, 30px); /* 20 filas de 30px */
+      border: 1px solid #000;
+    }
+
+    .cell {
+      border: 2px solid #444; /* Grosor del borde aumentado */
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background-color: lightgray;
+    }
+
+    .highlight {
+      background-color: yellow;
+      font-weight: bold;
+    }
+
+    .taxi {
+      background-color: limegreen;
+      color: white;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="map-container">
+    <!-- Generar la cuadrícula con 400 celdas vacías -->
+    <!-- Usamos un loop para generar todas las celdas -->
+    <!-- En este caso, se hacen 400 celdas (20 x 20) -->
+    <script>
+      const mapContainer = document.querySelector('.map-container');
+      for (let row = 1; row <= 20; row++) {
+        for (let col = 1; col <= 20; col++) {
+          const cell = document.createElement('div');
+          cell.classList.add('cell');
+          mapContainer.appendChild(cell);
+        }
+      }
+
+      // Agregar algunas celdas destacadas con datos
+      const highlightedCells = [
+        { col: 2, row: 2, text: 'X', class: 'highlight' },
+        { col: 2, row: 10, text: 'F', class: 'highlight' },
+        { col: 10, row: 10, text: 'E', class: 'highlight' },
+        { col: 20, row: 10, text: 'D', class: 'highlight' },
+        { col: 2, row: 20, text: 'G', class: 'highlight' },
+        { col: 10, row: 20, text: 'H', class: 'highlight' },
+        { col: 20, row: 20, text: 'I', class: 'highlight' },
+        { col: 8, row: 10, text: '1', class: 'taxi' }
+      ];
+
+      // Asignar clases y contenido a las celdas destacadas
+      highlightedCells.forEach(({ col, row, text, class: className }) => {
+        const index = (row - 1) * 20 + (col - 1);
+        const cell = mapContainer.children[index];
+        cell.classList.add(className);
+        cell.textContent = text;
+      });
+    </script>
+  </div>
+</body>
+</html>
