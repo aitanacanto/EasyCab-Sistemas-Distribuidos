@@ -1,62 +1,92 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 
-function RealTimeMap() {
-  const [map, setMap] = useState([]); // Estado para el mapa
+const RealTimeMap = () => {
+  const [mapa, setMapa] = useState(() => {
+    // Inicializa una copia única de cada fila
+    return Array.from({ length: 20 }, () => Array(20).fill(" "));
+  });
+  const ANCHO = 20;
+  const ALTO = 20;
+  const TAMANO_CELDA = 30;
+
+  const COLOR_FONDO = "lightgray";
+  const COLOR_TAXI_VERDE = "limegreen";
+  const COLOR_TAXI_ROJO = "red";
+  const COLOR_TAXI_AMARILLO = "yellow";
+  const COLOR_DESTINO = "blue";
+  const COLOR_CLIENTE = "orange";
+
+  // Función para determinar el color de cada celda
+  const determinarColor = (celda) => {
+    if (celda === " ") return COLOR_FONDO;
+    if (celda[0] >= "0" && celda[0] <= "9") {
+      if (celda[1] === "r") return COLOR_TAXI_ROJO;
+      if (celda[1] === "a") return COLOR_TAXI_AMARILLO;
+      return COLOR_TAXI_VERDE;
+    }
+    if (celda >= "A" && celda <= "Z") return COLOR_DESTINO;
+    if (celda >= "a" && celda <= "z") return COLOR_CLIENTE;
+    return COLOR_FONDO;
+  };
+
+  // Función para obtener el mapa desde la API
+  const fetchMapa = async () => {
+    try {
+      const response = await fetch("http://localhost:5002/mapa");
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const data = await response.json();
+      if (data.mapa) {
+        // Crea una nueva copia del mapa para asegurarse de que React detecta el cambio
+        const nuevoMapa = data.mapa.map((fila) => [...fila]);
+        setMapa(nuevoMapa);
+        console.log("Mapa actualizado:", nuevoMapa);
+      } else {
+        console.error("Mapa vacío o formato inválido.");
+      }
+    } catch (error) {
+      console.error("Error al obtener el mapa:", error);
+    }
+  };
 
   useEffect(() => {
-    // Función para obtener el mapa desde el servidor Flask
-    async function fetchMap() {
-      try {
-        const response = await fetch("http://localhost:4321/api/mapa");
-        const data = await response.json();
-        setMap(data.mapa); // Actualiza el estado con el mapa recibido
-      } catch (error) {
-        console.error("Error fetching map:", error);
-      }
-    }
-
-    fetchMap(); // Llamar por primera vez
-    const interval = setInterval(fetchMap, 1000); // Llamar cada segundo
-
-    // Limpia el intervalo cuando el componente se desmonta
-    return () => clearInterval(interval);
+    fetchMapa(); // Llamar al cargar la página
+    const interval = setInterval(fetchMapa, 500); // Actualizar cada 0.5 segundos
+    return () => clearInterval(interval); // Limpiar el intervalo al desmontar
   }, []);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minHeight: "100vh", backgroundColor: "#f3f3f3" }}>
-      {/* Encabezado del mapa */}
-      <div>
-        <h3>Mapa en Tiempo Real</h3>
-        <pre>{JSON.stringify(map, null, 2)}</pre> {/* Muestra el mapa en formato JSON */}
-      </div>
-
-      {/* Renderizado de la cuadrícula */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(20, 30px)", gridTemplateRows: "repeat(20, 30px)", border: "1px solid #000", marginTop: "20px" }}>
-        {Array(20 * 20) // Crea una cuadrícula de 400 celdas
-          .fill(0)
-          .map((_, index) => {
-            const row = Math.floor(index / 20) + 1; // Fila de la celda
-            const col = (index % 20) + 1; // Columna de la celda
-            const cellData = map.find(cell => cell.row === row && cell.col === col); // Busca datos de la celda
-            const cellStyle = {
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              border: "2px solid #444",
-              backgroundColor: cellData ? (cellData.class === "highlight" ? "yellow" : "limegreen") : "lightgray",
-              color: cellData && cellData.class === "taxi" ? "white" : "black",
-              fontWeight: cellData ? "bold" : "normal",
-            };
-
-            return (
-              <div key={index} style={cellStyle}>
-                {cellData ? cellData.text : ""}
-              </div>
-            );
-          })}
+      <h3>Mapa en Tiempo Real</h3>
+      {console.log("Estado del mapa:", mapa)} {/* Log para verificar el estado */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: `repeat(${ANCHO}, ${TAMANO_CELDA}px)`,
+          gridTemplateRows: `repeat(${ALTO}, ${TAMANO_CELDA}px)`,
+          gap: "1px",
+        }}
+      >
+        {mapa.map((fila, y) =>
+          fila.map((celda, x) => (
+            <div
+              key={`${x}-${y}`}
+              style={{
+                width: `${TAMANO_CELDA}px`,
+                height: `${TAMANO_CELDA}px`,
+                backgroundColor: determinarColor(celda),
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                border: "1px solid #444",
+              }}
+            >
+              {celda[0] >= "0" && celda[0] <= "9" ? celda[0] : ""}
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
-}
+};
 
 export default RealTimeMap;

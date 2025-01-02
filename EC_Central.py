@@ -11,6 +11,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import mapaPygame
 from threading import Lock
+import EC_API
 
 # TO-DO --> Hay que hacer una función para desconectar a los taxis ;)
 
@@ -173,6 +174,7 @@ def meterEnMapa(pos_x, pos_y, elemento, estado_taxi):
     mapa[pos_x][pos_y] = elemento
     mapa[1][1] = 'X'
     mapaPygame.actualizar_mapa_pygame(mapa, estado_taxi, "OK")
+    EC_API.actualizar_mapa(mapa)
     
 
 def envioMuchasPeticiones(peticion, customerXtaxis, peticionesXtaxis, taxi):
@@ -291,6 +293,7 @@ def enviarMensajeTaxiMapa():
         producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
         producerTaxi.send('actualizar_mapa', value=mapa)
         producerTaxi.flush()
+
 
     
 def enviarMensajeTaxiOrden(taxi_id, destino, letraDestino):
@@ -590,6 +593,7 @@ def cambiarPosicionTaxiMapa(taxi_id, taxi_posicion, antigua_posicion, estado_sen
 
     estado_taxi = leerEstadosDeTaxis(estado_sensor, "")
     mapaPygame.actualizar_mapa_pygame(mapa, estado_taxi, OK)
+    EC_API.actualizar_mapa(mapa)
 
 
 ################## BASE DE DATOS ##################
@@ -736,34 +740,19 @@ def leerMapaFichero():
 
     return arrayPos
 
-
-# Inicializa la aplicación Flask
-app = Flask(__name__)
-CORS(app)
-
-
-@app.route('/api/mapa', methods=['GET'])
-def obtener_mapa():
-    global mapa
-    with lock:
-        print("Mapa", mapa)
-        return jsonify({"mapa": mapa}), 200
-
-def iniciar_flask():
-    """Inicia el servidor Flask."""
-    app.run(debug=True, port=4321, use_reloader=False)
-
-# Hilo para ejecutar el servidor Flask en paralelo
-hilo_flask = threading.Thread(target=iniciar_flask, daemon=True)
-hilo_flask.start()
-
 arrayPos = leerMapaFichero()
 meterTaxisBaseDatos(arrayPos)
 inicMapa(arrayPos)
 
 print("[EMPEZANDO] Servidor inicializando...")
 
+
 mapaPygame.iniciar_pygame(ANCHO, ALTO)
+
+# Inicia la API en un hilo separado
+api_thread = threading.Thread(target=EC_API.iniciar_api, daemon=True)
+api_thread.start()
+
 
 hiloTaxi = threading.Thread(target=conexionTaxi)
 hiloTaxi.start()
