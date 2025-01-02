@@ -1,81 +1,162 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mapa en Cuadrícula</title>
+  <title>Mapa en Tiempo Real</title>
   <style>
     body {
       display: flex;
       justify-content: center;
       align-items: center;
-      min-height: 100vh;
+      height: 100vh;
       margin: 0;
-      background-color: #f3f3f3;
+      background: linear-gradient(to bottom, #1f4037, #99f2c8);
+      font-family: Arial, sans-serif;
     }
 
     .map-container {
+      width: 95vw;
+      height: 95vh;
+      background-color: #ffffff;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      align-items: center;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      color: #333;
+      text-align: center;
+      margin-bottom: 20px;
+      text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+    }
+
+    .grid {
       display: grid;
-      grid-template-columns: repeat(20, 30px); /* 20 columnas de 30px */
-      grid-template-rows: repeat(20, 30px); /* 20 filas de 30px */
-      border: 1px solid #000;
+      gap: 1px;
+      justify-content: center;
+      align-content: center;
+      background-color: #eaeaea;
+      width: 100%;
+      height: calc(100% - 100px); /* Altura ajustada al contenedor menos el título */
     }
 
     .cell {
-      border: 2px solid #444; /* Grosor del borde aumentado */
       display: flex;
       justify-content: center;
       align-items: center;
-      background-color: lightgray;
+      font-weight: bold;
+      font-size: 0.9rem;
+      border: 1px solid rgba(0, 0, 0, 0.1);
     }
 
-    .highlight {
-      background-color: yellow;
-      font-weight: bold;
+    .fondo {
+      background-color: #d3d3d3;
     }
 
-    .taxi {
-      background-color: limegreen;
-      color: white;
-      font-weight: bold;
+    .verde {
+      background-color: #32cd32;
+    }
+
+    .rojo {
+      background-color: #ff4d4d;
+    }
+
+    .amarillo {
+      background-color: #ffeb3b;
+    }
+
+    .naranja {
+      background-color: #ffa500;
+    }
+
+    .destino {
+      background-color: #ffeb3b;
+    }
+
+    .cliente {
+      background-color: #4285f4;
     }
   </style>
 </head>
 <body>
   <div class="map-container">
-    <!-- Generar la cuadrícula con 400 celdas vacías -->
-    <!-- Usamos un loop para generar todas las celdas -->
-    <!-- En este caso, se hacen 400 celdas (20 x 20) -->
-    <script>
-      const mapContainer = document.querySelector('.map-container');
-      for (let row = 1; row <= 20; row++) {
-        for (let col = 1; col <= 20; col++) {
-          const cell = document.createElement('div');
-          cell.classList.add('cell');
-          mapContainer.appendChild(cell);
+    <h1>Mapa en Tiempo Real</h1>
+    <div id="map-grid" class="grid"></div>
+  </div>
+
+  <script>
+    const ANCHO = 20; // Número de columnas
+    const ALTO = 20; // Número de filas
+
+    const ajustarTamañoCeldas = () => {
+      const grid = document.getElementById("map-grid");
+      const gridWidth = grid.clientWidth;
+      const gridHeight = grid.clientHeight;
+
+      const cellSize = Math.min(
+        Math.floor(gridWidth / ANCHO),
+        Math.floor(gridHeight / ALTO)
+      );
+
+      grid.style.gridTemplateColumns = `repeat(${ANCHO}, ${cellSize}px)`;
+      grid.style.gridTemplateRows = `repeat(${ALTO}, ${cellSize}px)`;
+    };
+
+    const determinarClase = (celda) => {
+      if (celda === " ") return "fondo";
+      if (celda[0] >= "0" && celda[0] <= "9") {
+        if (celda[1] === "r") return "rojo";
+        if (celda[1] === "a") return "amarillo";
+        return "verde";
+      }
+      if (celda >= "A" && celda <= "Z") return "destino";
+      if (celda >= "a" && celda <= "z") return "cliente";
+      return "fondo";
+    };
+
+    const renderMapa = (mapa) => {
+      const grid = document.getElementById("map-grid");
+      grid.innerHTML = "";
+
+      // Intercambiar filas y columnas
+      for (let x = 0; x < ANCHO; x++) {
+        for (let y = 0; y < ALTO; y++) {
+          const celda = mapa[y][x]; // Intercambiamos el acceso
+          const div = document.createElement("div");
+          div.className = `cell ${determinarClase(celda)}`;
+          div.textContent = celda !== " " ? celda[0] : ""; // Mostrar el contenido si no es vacío
+          grid.appendChild(div);
         }
       }
+    };
 
-      // Agregar algunas celdas destacadas con datos
-      const highlightedCells = [
-        { col: 2, row: 2, text: 'X', class: 'highlight' },
-        { col: 2, row: 10, text: 'F', class: 'highlight' },
-        { col: 10, row: 10, text: 'E', class: 'highlight' },
-        { col: 20, row: 10, text: 'D', class: 'highlight' },
-        { col: 2, row: 20, text: 'G', class: 'highlight' },
-        { col: 10, row: 20, text: 'H', class: 'highlight' },
-        { col: 20, row: 20, text: 'I', class: 'highlight' },
-        { col: 8, row: 10, text: '1', class: 'taxi' }
-      ];
+    const fetchMapa = async () => {
+      try {
+        const response = await fetch("http://localhost:5002/mapa");
+        if (!response.ok) {
+          throw new Error(`Error al obtener el mapa: ${response.status}`);
+        }
+        const data = await response.json();
+        if (data.mapa) {
+          renderMapa(data.mapa);
+          ajustarTamañoCeldas();
+        } else {
+          console.error("Mapa vacío o formato inválido");
+        }
+      } catch (error) {
+        console.error("Error al obtener el mapa:", error);
+      }
+    };
 
-      // Asignar clases y contenido a las celdas destacadas
-      highlightedCells.forEach(({ col, row, text, class: className }) => {
-        const index = (row - 1) * 20 + (col - 1);
-        const cell = mapContainer.children[index];
-        cell.classList.add(className);
-        cell.textContent = text;
-      });
-    </script>
-  </div>
+    fetchMapa();
+    setInterval(fetchMapa, 500);
+    window.addEventListener("resize", ajustarTamañoCeldas);
+  </script>
 </body>
 </html>
