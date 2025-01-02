@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mapa en Tiempo Real</title>
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      background: linear-gradient(to bottom, #1f4037, #99f2c8);
+      font-family: Arial, sans-serif;
+    }
+
+    .map-container {
+      width: 95vw;
+      height: 95vh;
+      background-color: #ffffff;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      align-items: center;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      color: #333;
+      text-align: center;
+      margin-bottom: 20px;
+      text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+    }
+
+    .grid {
+      display: grid;
+      gap: 1px;
+      justify-content: center;
+      align-content: center;
+      background-color: #eaeaea;
+      width: 100%;
+      height: calc(100% - 100px); /* Altura ajustada al contenedor menos el título */
+    }
+
+    .cell {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-weight: bold;
+      font-size: 0.9rem;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+    }
+
+    .fondo {
+      background-color: #d3d3d3;
+    }
+
+    .verde {
+      background-color: #32cd32;
+    }
+
+    .rojo {
+      background-color: #ff4d4d;
+    }
+
+    .amarillo {
+      background-color: #ffeb3b;
+    }
+
+    .naranja {
+      background-color: #ffa500;
+    }
+
+    .destino {
+      background-color: #ffeb3b;
+    }
+
+    .cliente {
+      background-color: #4285f4;
+    }
+  </style>
+</head>
+<body>
+  <div class="map-container">
+    <h1>Mapa en Tiempo Real</h1>
+    <div id="map-grid" class="grid"></div>
+  </div>
+
+  <script>
+    const ANCHO = 20; // Número de columnas
+    const ALTO = 20; // Número de filas
+
+    const ajustarTamañoCeldas = () => {
+      const grid = document.getElementById("map-grid");
+      const gridWidth = grid.clientWidth;
+      const gridHeight = grid.clientHeight;
+
+      const cellSize = Math.min(
+        Math.floor(gridWidth / ANCHO),
+        Math.floor(gridHeight / ALTO)
+      );
+
+      grid.style.gridTemplateColumns = `repeat(${ANCHO}, ${cellSize}px)`;
+      grid.style.gridTemplateRows = `repeat(${ALTO}, ${cellSize}px)`;
+    };
+
+    const determinarClase = (celda) => {
+      if (celda === " ") return "fondo";
+      if (celda[0] >= "0" && celda[0] <= "9") {
+        if (celda[1] === "r") return "rojo";
+        if (celda[1] === "a") return "amarillo";
+        return "verde";
+      }
+      if (celda >= "A" && celda <= "Z") return "destino";
+      if (celda >= "a" && celda <= "z") return "cliente";
+      return "fondo";
+    };
+
+    const renderMapa = (mapa) => {
+      const grid = document.getElementById("map-grid");
+      grid.innerHTML = "";
+
+      // Intercambiar filas y columnas
+      for (let x = 0; x < ANCHO; x++) {
+        for (let y = 0; y < ALTO; y++) {
+          const celda = mapa[y][x]; // Intercambiamos el acceso
+          const div = document.createElement("div");
+          div.className = `cell ${determinarClase(celda)}`;
+          div.textContent = celda !== " " ? celda[0] : ""; // Mostrar el contenido si no es vacío
+          grid.appendChild(div);
+        }
+      }
+    };
+
+    const fetchMapa = async () => {
+      try {
+        const response = await fetch("http://localhost:5002/mapa");
+        if (!response.ok) {
+          throw new Error(`Error al obtener el mapa: ${response.status}`);
+        }
+        const data = await response.json();
+        if (data.mapa) {
+          renderMapa(data.mapa);
+          ajustarTamañoCeldas();
+        } else {
+          console.error("Mapa vacío o formato inválido");
+        }
+      } catch (error) {
+        console.error("Error al obtener el mapa:", error);
+      }
+    };
+
+    fetchMapa();
+    setInterval(fetchMapa, 500);
+    window.addEventListener("resize", ajustarTamañoCeldas);
+  </script>
+</body>
+</html>
