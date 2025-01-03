@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify           # type: ignore
 import os
 import traceback
 
@@ -128,4 +128,4 @@ def list_taxis():
         return jsonify({"error": f"Error al obtener la lista de taxis: {e}"}), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5001)
+    app.run(host="0.0.0.0", port=5001, ssl_context=("cert.pem", "key.pem"))
