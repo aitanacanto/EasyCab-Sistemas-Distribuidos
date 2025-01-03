@@ -176,7 +176,6 @@ def meterEnMapa(pos_x, pos_y, elemento, estado_taxi):
     mapaPygame.actualizar_mapa_pygame(mapa, estado_taxi, "OK")
     EC_API.actualizar_mapa(mapa)
     
-
 def envioMuchasPeticiones(peticion, customerXtaxis, peticionesXtaxis, taxi):
     global viajeTerminado, estadoEmergencia
 
@@ -286,7 +285,6 @@ def conexionKafka():
                 actualizarPosicionTaxiFichero(movimientoTaxi[0], movimientoTaxi[1], movimientoTaxi[2], movimientoTaxi[4])
                 enviarMensajeTaxiMapa()
 
-
 def enviarMensajeTaxiMapa():
     global mapa
     with lock:
@@ -294,8 +292,6 @@ def enviarMensajeTaxiMapa():
         producerTaxi.send('actualizar_mapa', value=mapa)
         producerTaxi.flush()
 
-
-    
 def enviarMensajeTaxiOrden(taxi_id, destino, letraDestino):
     global estadoEmergencia
     producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
@@ -594,7 +590,6 @@ def cambiarPosicionTaxiMapa(taxi_id, taxi_posicion, antigua_posicion, estado_sen
     estado_taxi = leerEstadosDeTaxis(estado_sensor, "")
     mapaPygame.actualizar_mapa_pygame(mapa, estado_taxi, OK)
     EC_API.actualizar_mapa(mapa)
-
 
 ################## BASE DE DATOS ##################
 

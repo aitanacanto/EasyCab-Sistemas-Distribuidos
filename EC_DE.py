@@ -135,9 +135,12 @@ def realizarViaje():
             
             if ubicacion[0] == 1 and ubicacion[1] == 1 and estadoEmergencia:
                 try:
-                    url = f"https://localhost:5001/unregister_taxi/{ID_TAXI}"
+                    url = f"http://localhost:5001/unregister_taxi"
                     print(f"Enviando solicitud de desconexión para el taxi {ID_TAXI}...")
-                    response = requests.post(url)
+                    payload = {
+                        "taxi_id": ID_TAXI
+                    }
+                    response = requests.post(url, json=payload)
 
                     print(f"Estado HTTP: {response.status_code}")
                     print(f"Contenido de la respuesta: {response.text}")
@@ -367,7 +370,7 @@ def actualizarPosicion(destino, mapa, letra):
 
 def registrar_taxi_en_registry(taxi_id, pos_x, pos_y):
     try:
-        url = f"https://localhost:5001/register_taxi"
+        url = f"http://localhost:5001/register_taxi"
         payload = {
             "taxi_id": taxi_id,
             "pos_x": pos_x,

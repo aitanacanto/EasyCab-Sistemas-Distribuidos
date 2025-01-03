@@ -40,20 +40,6 @@ def guardar_taxis(taxis):
     except Exception as e:
         print(f"Error al guardar en el archivo de taxis: {e}")
 
-def borrar_taxi(taxi_id):
-    taxis = leer_taxis()
-    lista_taxis = []
-
-    for taxi in taxis:
-        if taxi['taxi'] == taxi_id:
-            lista_taxis.append(f"<NO><NO><{taxi['taxi_id']}><{taxi['pos_x']}><{taxi['pos_y']}>\n")
-        else:
-            lista_taxis.append(f"<{taxi['asignado']}><{taxi['operativo']}><{taxi['taxi_id']}><{taxi['pos_x']}><{taxi['pos_y']}>\n")
-
-    with open(ARCHIVO_TAXI, "w") as archivo:
-        for linea in lista_taxis:
-            archivo.write(linea)
-
 @app.route("/register_taxi", methods=["POST"])
 def register_taxi():
     try:
@@ -97,15 +83,35 @@ def register_taxi():
         print(f"Error durante el registro del taxi: {e}")
         return jsonify({"error": f"Error al registrar taxi: {e}"}), 500
 
-@app.route("/unregister_taxi/<taxi_id>", methods=["POST"])
-def unregister_taxi(taxi_id):
+def borrar_taxi(taxi_id):
+    taxis = leer_taxis()
+    lista_taxis = []
+
+    for taxi in taxis:
+        if taxi['taxi_id'] == taxi_id:  # Cambia 'taxi' por 'taxi_id'
+            lista_taxis.append(f"<NO><NO><{taxi['taxi_id']}><{taxi['pos_x']}><{taxi['pos_y']}>\n")
+        else:
+            lista_taxis.append(f"<{taxi['asignado']}><{taxi['operativo']}><{taxi['taxi_id']}><{taxi['pos_x']}><{taxi['pos_y']}>\n")
+
+    with open(ARCHIVO_TAXI, "w") as archivo:
+        for linea in lista_taxis:
+            archivo.write(linea)
+
+@app.route("/unregister_taxi", methods=["POST"])
+def unregister_taxi():
     try:
+        print("Solicitud recibida en /unregister_taxi")
+        data = request.json
+        print(f"Datos recibidos: {data}")
+        taxi_id = data.get("taxi_id")
+        print(f"Taxi ID: {taxi_id}")
+        
         # Leer el archivo de taxis
         taxis = leer_taxis()
     
         taxi_encontrado = False
         for taxi in taxis:
-            if taxi["taxi_id"] == taxi_id:
+            if taxi['taxi_id'] == taxi_id:
                 taxi_encontrado = True
 
         if not taxi_encontrado:
@@ -128,4 +134,4 @@ def list_taxis():
         return jsonify({"error": f"Error al obtener la lista de taxis: {e}"}), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5001, ssl_context=("cert.pem", "key.pem"))
+    app.run(host="0.0.0.0", port=5001)

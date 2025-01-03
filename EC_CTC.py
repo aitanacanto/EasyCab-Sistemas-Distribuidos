@@ -13,7 +13,7 @@ estado_trafico = "OK"
 
 # API Key y URL base de OpenWeather
 API_KEY = "removed"
-URL_BASE = "https://api.openweathermap.org/data/2.5/weather"
+URL_BASE = "http://api.openweathermap.org/data/2.5/weather"
 
 # Función para actualizar el estado del tráfico periódicamente
 def actualizar_estado_trafico():
