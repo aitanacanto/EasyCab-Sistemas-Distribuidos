@@ -3,6 +3,7 @@ import pygame
 import sys
 import queue
 
+
 # Definir constantes y colores
 COLOR_FONDO = (211, 211, 211)  # Gris claro
 COLOR_CLIENTE = (0, 0, 255)     # Azul
@@ -41,7 +42,7 @@ def dibujar_mapa(mapa_data, estados_taxis, estados_clientes):
     screen.fill(COLOR_FONDO)
 
     # Dibujar tabla de estados
-    dibujar_tabla_estados(estados_taxis, estados_clientes)
+    botones_taxis = dibujar_tabla_estados(estados_taxis, estados_clientes)
 
     # Dibujar el mapa de celdas
     for y in range(ALTO):
@@ -84,13 +85,12 @@ def dibujar_mapa(mapa_data, estados_taxis, estados_clientes):
                 print(f"Error representar el mapa --> {mapa_data[x][y]}")
 
     pygame.display.flip()
+    return botones_taxis
 
 def dibujar_tabla_estados(estados_taxis, estados_clientes):
     # Títulos de las columnas
     titulo_taxis = font.render("Taxis", True, COLOR_TEXTO)
     screen.blit(titulo_taxis, (10, 10))
-    #titulo_clientes = font.render("Clientes", True, COLOR_TEXTO)
-    #screen.blit(titulo_clientes, (ANCHO_VENTANA // 2, 10))
 
     # Dibujar estados de taxis
     y_offset = 40
@@ -110,23 +110,16 @@ def dibujar_tabla_estados(estados_taxis, estados_clientes):
 
             y_offset += 30
 
-        # Dibujar estados de clientes
-        """
-        y_offset = 40
-        for estado in estados_clientes:
-            texto = f"Id: {estado['id']}, Destino: {estado['destino']}, Estado: {estado['estado']}"
-            estado_surface = font.render(texto, True, COLOR_TEXTO)
-            screen.blit(estado_surface, (ANCHO_VENTANA // 2, y_offset))
-            y_offset += 20
-        """
+    return botones_taxis
+
 def manejar_eventos_botones(evento, botones_taxis):
-    """
     if evento.type == pygame.MOUSEBUTTONDOWN:
         mouse_pos = evento.pos
         for boton_rect, taxi_id in botones_taxis:
             if boton_rect.collidepoint(mouse_pos):
-                print(f"Taxi {taxi_id} vuelve a la base")  # Acción de "volver a la base"
-    """
+                print(f"Taxi {taxi_id} vuelve a la base")  # Confirmar acción en la consola
+                from EC_Central import vueltaBase  # Importar la función
+                vueltaBase(taxi_id)  # Llamar a la función para enviar al taxi a la base
 
 # Actualizar el mapa: agregar a la cola para ser procesado por el hilo principal
 def actualizar_mapa_pygame(mapa_data, estados_taxis, estados_clientes):
@@ -134,20 +127,20 @@ def actualizar_mapa_pygame(mapa_data, estados_taxis, estados_clientes):
 
 def main_pygame_loop():
     running = True
+    botones_taxis = []  # Variable para almacenar los botones de taxis
     while running:
-        # Procesar eventos de Pygame
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            manejar_eventos_botones(event, botones_taxis)  # Pasar los botones para manejar los clics
 
         # Ver si hay actualizaciones en la cola
         while not cola_actualizaciones.empty():
             mapa_data, estados_taxis, estados_clientes = cola_actualizaciones.get()
-            dibujar_mapa(mapa_data, estados_taxis, estados_clientes)
+            botones_taxis = dibujar_mapa(mapa_data, estados_taxis, estados_clientes)  # Actualizar botones
 
         # Limitar la tasa de actualización a 30 FPS
         clock.tick(30)
 
-    # Cerrar Pygame y salir del programa
     pygame.quit()
     sys.exit()
