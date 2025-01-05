@@ -1,12 +1,14 @@
 from flask import Flask, request, jsonify           # type: ignore
 import os
 import traceback
+import secrets
+import time
 
 app = Flask(__name__)
 
 # Archivo existente de taxis
 ARCHIVO_TAXI = "taxi.txt"
-
+ARCHIVO_TOKENS = "token.txt"
 # Crear el archivo de taxis si no existe
 if not os.path.exists(ARCHIVO_TAXI):
     with open(ARCHIVO_TAXI, "w") as archivo:
@@ -83,6 +85,19 @@ def register_taxi():
         print(f"Error durante el registro del taxi: {e}")
         return jsonify({"error": f"Error al registrar taxi: {e}"}), 500
 
+def leer_tokens():
+    tokens = {}
+    try:
+        with open(ARCHIVO_TOKENS, "r") as archivo:
+            for linea in archivo:
+                taxi_id, token = linea.strip().split(":")
+                tokens[taxi_id] = token
+    except FileNotFoundError:
+        pass
+    except Exception as e:
+        print(f"Error al leer el archivo de tokens: {e}")
+    return tokens
+
 def borrar_taxi(taxi_id):
     taxis = leer_taxis()
     lista_taxis = []
@@ -97,8 +112,34 @@ def borrar_taxi(taxi_id):
         for linea in lista_taxis:
             archivo.write(linea)
 
+def borrarLineaTokens(taxi_id):
+    try:
+        nuevas_lineas = []
+
+        # Leer el archivo de tokens y filtrar las líneas
+        with open(ARCHIVO_TOKENS, "r") as archivo:
+            lineas = archivo.readlines()
+
+        for linea in lineas:
+            id_actual, _ = linea.strip().split(":")
+            if id_actual != taxi_id:  # Mantener solo las líneas que no coincidan con el taxi_id
+                nuevas_lineas.append(linea)
+
+        # Escribir las líneas filtradas de vuelta en el archivo
+        with open(ARCHIVO_TOKENS, "w") as archivo:
+            archivo.writelines(nuevas_lineas)
+
+        print(f"Taxi {taxi_id} eliminado correctamente del archivo de tokens.")
+
+    except FileNotFoundError:
+        print(f"Error: El archivo {ARCHIVO_TOKENS} no existe.")
+    except Exception as e:
+        print(f"Error al borrar la línea del taxi {taxi_id}: {e}")
+    
+
 @app.route("/unregister_taxi", methods=["POST"])
 def unregister_taxi():
+
     try:
         print("Solicitud recibida en /unregister_taxi")
         data = request.json
@@ -118,6 +159,7 @@ def unregister_taxi():
             return jsonify({"error": f"El taxi {taxi_id} no existe en la base de datos"}), 404
 
         borrar_taxi(taxi_id)
+        borrarLineaTokens(taxi_id)
 
         return jsonify({"mensaje": f"Taxi {taxi_id} desconectado correctamente"}), 200
 

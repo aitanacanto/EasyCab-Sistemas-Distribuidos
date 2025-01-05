@@ -135,30 +135,6 @@ def enviarTodosTaxisBase():
 
     return 
 
-def borrarLineaTokens(taxi_id):
-    try:
-        nuevas_lineas = []
-
-        # Leer el archivo de tokens y filtrar las líneas
-        with open(ARCHIVO_TOKENS, "r") as archivo:
-            lineas = archivo.readlines()
-
-        for linea in lineas:
-            id_actual, _ = linea.strip().split(":")
-            if id_actual != taxi_id:  # Mantener solo las líneas que no coincidan con el taxi_id
-                nuevas_lineas.append(linea)
-
-        # Escribir las líneas filtradas de vuelta en el archivo
-        with open(ARCHIVO_TOKENS, "w") as archivo:
-            archivo.writelines(nuevas_lineas)
-
-        print(f"Taxi {taxi_id} eliminado correctamente del archivo de tokens.")
-
-    except FileNotFoundError:
-        print(f"Error: El archivo {ARCHIVO_TOKENS} no existe.")
-    except Exception as e:
-        print(f"Error al borrar la línea del taxi {taxi_id}: {e}")
-
 def vueltaBase(taxi_id):
     global estadoEmergencia
     producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
@@ -346,10 +322,9 @@ def recibirMensajeTaxi():
                         print(f"Token válido para taxi {taxi_id}. Procesando mensaje.")
                         peticion = (taxi_id, taxi_posicion, viaje_finalizado, antigua_posicion, estado_sensor)
                         peticiones.append(peticion)
-                        if taxi_posicion == (1,1) and estadoEmergencia:
-                            borrarLineaTokens(taxi_id)
                     else:
                         print(f"Token inválido para taxi {taxi_id}. Ignorando mensaje.")
+
 
         return peticiones
 
@@ -502,33 +477,29 @@ def validarUbicacion(id_taxi, conn):
 
         for linea in lineas:
             datos = linea.strip().replace('<', '').split('>')
-
-            taxi_asignado = datos[0]
-            taxi_operativo = datos[1]
             taxi_id = datos[2]
+            pos_x, pos_y = datos[3], datos[4]
 
             if taxi_id == id_taxi:
+                taxiEncontrado = True
                 nuevo_token = generar_token()
-                if taxi_asignado == "NO" and taxi_operativo == "NO":
-                    taxiEncontrado = True
-                    mensaje = "<" + OK + "><"+ datos[3] + "><" + datos[4] + "><" + nuevo_token + ">"
-                    conn.send(mensaje.encode(FORMAT))
-                    
-                    with open(ARCHIVO_TOKENS, 'a') as archivo_tokens:
-                        archivo_tokens.write(f"{taxi_id}:{nuevo_token}\n")
-                        
-                else:
-                    taxiEncontrado = False
-                    nuevasLineas.append(linea)
+                mensaje = f"<{OK}><{pos_x}><{pos_y}><{nuevo_token}>"
+                conn.send(mensaje.encode(FORMAT))
+
+                # Actualizar el archivo de tokens
+                with open(ARCHIVO_TOKENS, 'a') as archivo_tokens:
+                    archivo_tokens.write(f"{taxi_id}:{nuevo_token}\n")
+
             else:
                 nuevasLineas.append(linea)
 
         if not taxiEncontrado:
             conn.send(FIN.encode(FORMAT))
             return
-            
+
     except Exception as e:
         print(f"EXCEPCIÓN ---> No se ha podido comunicar con el taxi: {e}")
+
 
 def verificacionTaxi(conn, addr):
     try:

@@ -8,8 +8,8 @@ from kafka.structs import OffsetAndMetadata
 import json
 import traceback
 import requests
-from threading import Lock
-
+import tkinter as tk
+BASE_URL = "http://localhost:5001"
 lock = threading.Lock()
 
 # Argumentos y configuraciones
@@ -133,28 +133,14 @@ def realizarViaje():
             
             print(f"Destino --> {str(destino[0])}, {str(destino[1])}")
             
-            if ubicacion[0] == 1 and ubicacion[1] == 1 and estadoEmergencia:
-                try:
-                    url = f"http://localhost:5001/unregister_taxi"
-                    print(f"Enviando solicitud de desconexión para el taxi {ID_TAXI}...")
-                    payload = {
-                        "taxi_id": ID_TAXI
-                    }
-                    response = requests.post(url, json=payload)
-
-                    print(f"Estado HTTP: {response.status_code}")
-                    print(f"Contenido de la respuesta: {response.text}")
-
-                    if response.status_code == 200:
-                        print(f"Taxi {ID_TAXI} desconectado correctamente en EC_Registry.")
-                    else:
-                        print(f"Error al desconectar el taxi {ID_TAXI}. Respuesta: {response.json()}")
-
-                except requests.exceptions.RequestException as e:
-                    print(f"Error al comunicarse con EC_Registry: {e}")
-                    sys.exit(1)
+            if ubicacion == (1,1) and estadoEmergencia:
+                print("Taxi ha llegado a la base.")
+                enviarPosicionTaxi(ID_TAXI, ubicacion, antiguaPosicion, True, OK)
+                time.sleep(2)
+                desconectar_taxi()
+                break
             
-            if ubicacion[0] == destino[0] and ubicacion[1] == destino[1]:
+            elif ubicacion[0] == destino[0] and ubicacion[1] == destino[1]:
                 enviarPosicionTaxi(ID_TAXI, ubicacion, antiguaPosicion, True, OK)
                 break
             else:
@@ -319,44 +305,26 @@ def conexionSensor():
     socketSensor.close()
 
 def movimiento(posX, posY, objetivo, mapa, letraUbicacion):
-
-    if   posY < objetivo[1] and posX < objetivo[0] and (mapa[posX+1][posY+1] == ' ' or mapa[posX+1][posY+1] == letraUbicacion or (posX+1 == objetivo[0] and posY+1 == objetivo[1])):
-        posX += 1
-        posY += 1
-    elif posY > objetivo[1] and posX > objetivo[0] and (mapa[posX-1][posY-1] == ' ' or mapa[posX-1][posY-1] == letraUbicacion or (posX-1 == objetivo[0] and posY-1 == objetivo[1])):
+    if posX > objetivo[0]:
         posX -= 1
-        posY -= 1
-    elif posY > objetivo[1] and posX < objetivo[0] and (mapa[posX+1][posY-1] == ' ' or mapa[posX+1][posY-1] == letraUbicacion or (posX+1 == objetivo[0] and posY-1 == objetivo[1])):
+    elif posX < objetivo[0]:
         posX += 1
+    if posY > objetivo[1]:
         posY -= 1
-    elif posY < objetivo[1] and posX > objetivo[0] and (mapa[posX-1][posY+1] == ' ' or mapa[posX-1][posY+1] == letraUbicacion or (posX-1 == objetivo[0] and posY+1 == objetivo[1])):
-        posX -= 1
+    elif posY < objetivo[1]:
         posY += 1
 
-    elif posX < objetivo[0] and (mapa[posX+1][posY] == ' ' or mapa[posX+1][posY] == letraUbicacion or (posX+1 == objetivo[0] and posY == objetivo[1])):
-        posX += 1
-    elif posX > objetivo[0] and (mapa[posX-1][posY] == ' ' or mapa[posX-1][posY] == letraUbicacion or (posX-1 == objetivo[0] and posY == objetivo[1])):
-        posX -= 1
-    elif posY < objetivo[1] and (mapa[posX][posY+1] == ' ' or mapa[posX][posY+1] == letraUbicacion or (posX == objetivo[0] and posY+1 == objetivo[1])):
-        posY += 1
-    elif posY > objetivo[1] and (mapa[posX][posY-1] == ' ' or mapa[posX][posY-1] == letraUbicacion or (posX == objetivo[0] and posY-1 == objetivo[1])):
-        posY -= 1
+    # Si ya estamos en la posición objetivo, mantener
+    if (posX, posY) == objetivo:
+        return (posX, posY)
 
+    # Asegurar que se puede avanzar (sin bloqueos)
+    if mapa[posX][posY] in [' ', letraUbicacion] or (posX, posY) == objetivo:
+        return (posX, posY)
     else:
-        if posX != 0 and posY != 19 and mapa[posX-1][posY+1] == ' ':
-            posX -= 1
-            posY += 1
-        elif posX != 0 and posY != 0 and mapa[posX-1][posY-1] == ' ':
-            posX -= 1
-            posY -= 1
-        elif posX != 19 and posY != 19 and mapa[posX+1][posY+1] == ' ':
-            posX += 1
-            posY += 1
-        elif posX != 19 and posY != 0 and mapa[posX+1][posY-1] == ' ':
-            posX += 1
-            posY -= 1
+        print("Movimiento bloqueado, intentando alternativa.")
+        return (posX, posY)  # Quedarse en la posición actual si no se puede avanzar
 
-    return (posX, posY)
 
 def actualizarPosicion(destino, mapa, letra):
     global ubicacion
@@ -397,29 +365,62 @@ def registrar_taxi_en_registry(taxi_id, pos_x, pos_y):
 def validarID(socketCentral):
     global ubicacion, token
     socketCentral.send(ID_TAXI.encode())
-    respuesta = socketCentral.recv(4096)
+    respuesta = socketCentral.recv(4096).decode()
 
-    if respuesta.decode() == FIN:
+    if respuesta == FIN:
         print("ERROR: ID del taxi ya está en uso")
         socketCentral.close()
         sys.exit(1)
     else:
-        datos = respuesta.decode().strip().replace('<', '').split('>')
+        datos = respuesta.strip().replace('<', '').split('>')
         ubicacion = (int(datos[1]), int(datos[2]))
-        token = datos[3]
-        print("ID asignado con éxito")
-
-        registrar_taxi_en_registry(ID_TAXI, ubicacion[0], ubicacion[1])
+        token = datos[3]  # Actualizar el token
+        print(f"ID asignado con éxito. Token recibido: {token}")
 
 def conectarConServidor():
     global socketCentral
     socketCentral = socket.socket()
     socketCentral.connect((IP_CENTRAL, PUERTO_CENTRAL))
     validarID(socketCentral)
+    socketCentral.close()
+
+####### CONEXIÓN/DESCONEXIÓN #######
+
+def conectar_taxi():
+    try:
+        conectarConServidor()
+        url = f"{BASE_URL}/register_taxi"
+        payload = {
+            "taxi_id": ID_TAXI,
+            "pos_x": 1,
+            "pos_y": 1
+        }
+        response = requests.post(url, json=payload)
+        if response.status_code == 200:
+            resultado_label.config(text=f"Taxi {ID_TAXI} conectado correctamente.")
+            print(f"Taxi {ID_TAXI} conectado correctamente.")
+        else:
+            resultado_label.config(text=f"Error al conectar: {response.text}")
+            print(f"Taxi {ID_TAXI} no se ha llegado a desconectar ERROR!!")
+    except requests.exceptions.RequestException as e:
+        resultado_label.config(text=f"Error al conectar: {e}")
+        print(f"Error al conectar: {e}")
+
+def desconectar_taxi():
+    try:
+        url = f"{BASE_URL}/unregister_taxi"
+        payload = {
+            "taxi_id": ID_TAXI,
+        }
+        response = requests.post(url, json=payload)
+        if response.status_code == 200:
+            resultado_label.config(text=f"Taxi {ID_TAXI} desconectado correctamente.")
+        else:
+            resultado_label.config(text=f"Error al desconectar: {response.text}")
+    except requests.exceptions.RequestException as e:
+        resultado_label.config(text=f"Error al desconectar: {e}")
 
 ############## MAIN ################
-
-conectarConServidor()
 
 hiloSensor = threading.Thread(target=conexionSensor)
 hiloSensor.start()
@@ -429,6 +430,21 @@ hiloKafka.start()
 
 hiloEstadoAlarma = threading.Thread(target=comprobarEstadoAlarma)
 hiloEstadoAlarma.start()
+
+ventana = tk.Tk()
+ventana.title("Control de DigitalEngine")
+ventana.geometry("400x200")
+
+# Etiqueta para mostrar resultados
+resultado_label = tk.Label(ventana, text="Estado: Esperando acción", wraplength=300)
+resultado_label.pack(pady=10)
+
+# Botones para conectar
+boton_conectar = tk.Button(ventana, text="Conectar Taxi", command=conectar_taxi, bg="green", fg="white")
+boton_conectar.pack(pady=5)
+
+# Iniciar el loop principal de Tkinter
+ventana.mainloop()
 
 if stop_event.is_set():
     consumer_actualizacion_mapa.close()
