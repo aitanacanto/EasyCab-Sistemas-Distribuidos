@@ -149,7 +149,7 @@ def vueltaBase(taxi_id):
 def meterEnMapa(pos_x, pos_y, elemento, estado_taxi):
     mapa[pos_x][pos_y] = elemento
     mapa[1][1] = 'X'
-    mapaPygame.actualizar_mapa_pygame(mapa, estado_taxi, "OK")
+    mapaPygame.actualizar_mapa_pygame(mapa, estado_taxi)
     EC_API.actualizar_mapa(mapa)
     
 def envioMuchasPeticiones(peticion, customerXtaxis, peticionesXtaxis, taxi):
@@ -160,7 +160,7 @@ def envioMuchasPeticiones(peticion, customerXtaxis, peticionesXtaxis, taxi):
     
     for unDestino in peticion:
         if not estadoEmergencia:
-            # Verificar si hay emergencia
+
             if estadoEmergencia:
                 print(f"Emergencia activada. Taxi {taxi[0]} enviado directamente a la base.")
                 vueltaBase(taxi[0])
@@ -236,7 +236,7 @@ def conexionKafka():
                     hiloSolicitudes.start()
                 else:
                     listaEsperaClientes.append(peticion)
-                    time.sleep(4)                                   # Lo ponemos en la lista de espera y nos esperamos 4 segundos
+                    time.sleep(4)                                   
                 
 
         movimientosTaxi = recibirMensajeTaxi()
@@ -257,6 +257,7 @@ def conexionKafka():
                                 viajeTerminado = True
                             customerXtaxis.remove(tupla)
 
+                                        # taxi_id,          taxi_posicion,      antigua_posicion, estado_sensor
                 cambiarPosicionTaxiMapa(movimientoTaxi[0], movimientoTaxi[1], movimientoTaxi[3], movimientoTaxi[4])
                 actualizarPosicionTaxiFichero(movimientoTaxi[0], movimientoTaxi[1], movimientoTaxi[2], movimientoTaxi[4])
                 enviarMensajeTaxiMapa()
@@ -324,8 +325,6 @@ def recibirMensajeTaxi():
                         peticiones.append(peticion)
                     else:
                         print(f"Token inválido para taxi {taxi_id}. Ignorando mensaje.")
-
-
         return peticiones
 
     except Exception as e:
@@ -559,7 +558,7 @@ def cambiarPosicionTaxiMapa(taxi_id, taxi_posicion, antigua_posicion, estado_sen
         mapa[taxi_posicion[0]][taxi_posicion[1]] = f"{taxi_id}r"
 
     estado_taxi = leerEstadosDeTaxis(estado_sensor, "")
-    mapaPygame.actualizar_mapa_pygame(mapa, estado_taxi, OK)
+    mapaPygame.actualizar_mapa_pygame(mapa, estado_taxi)
     EC_API.actualizar_mapa(mapa)
 
 ################## BASE DE DATOS ##################

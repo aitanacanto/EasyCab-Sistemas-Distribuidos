@@ -38,11 +38,11 @@ def iniciar_pygame(ancho, alto):
     clock = pygame.time.Clock()  # Controlador de FPS
     font = pygame.font.Font(None, 24)  # Fuente para el texto dentro de las celdas
 
-def dibujar_mapa(mapa_data, estados_taxis, estados_clientes):
+def dibujar_mapa(mapa_data, estados_taxis):
     screen.fill(COLOR_FONDO)
 
     # Dibujar tabla de estados
-    botones_taxis = dibujar_tabla_estados(estados_taxis, estados_clientes)
+    botones_taxis = dibujar_tabla_estados(estados_taxis)
 
     # Dibujar el mapa de celdas
     for y in range(ALTO):
@@ -87,7 +87,7 @@ def dibujar_mapa(mapa_data, estados_taxis, estados_clientes):
     pygame.display.flip()
     return botones_taxis
 
-def dibujar_tabla_estados(estados_taxis, estados_clientes):
+def dibujar_tabla_estados(estados_taxis):
     # Títulos de las columnas
     titulo_taxis = font.render("Taxis", True, COLOR_TEXTO)
     screen.blit(titulo_taxis, (10, 10))
@@ -122,8 +122,8 @@ def manejar_eventos_botones(evento, botones_taxis):
                 vueltaBase(taxi_id)  # Llamar a la función para enviar al taxi a la base
 
 # Actualizar el mapa: agregar a la cola para ser procesado por el hilo principal
-def actualizar_mapa_pygame(mapa_data, estados_taxis, estados_clientes):
-    cola_actualizaciones.put((mapa_data, estados_taxis, estados_clientes))
+def actualizar_mapa_pygame(mapa_data, estados_taxis):
+    cola_actualizaciones.put((mapa_data, estados_taxis))
 
 def main_pygame_loop():
     running = True
@@ -136,8 +136,8 @@ def main_pygame_loop():
 
         # Ver si hay actualizaciones en la cola
         while not cola_actualizaciones.empty():
-            mapa_data, estados_taxis, estados_clientes = cola_actualizaciones.get()
-            botones_taxis = dibujar_mapa(mapa_data, estados_taxis, estados_clientes)  # Actualizar botones
+            mapa_data, estados_taxis = cola_actualizaciones.get()
+            botones_taxis = dibujar_mapa(mapa_data, estados_taxis)  # Actualizar botones
 
         # Limitar la tasa de actualización a 30 FPS
         clock.tick(30)
