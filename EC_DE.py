@@ -9,7 +9,13 @@ import json
 import traceback
 import requests
 import tkinter as tk
+from cryptography.fernet import Fernet
 BASE_URL = "http://localhost:5001"
+
+
+CLAVE_TAXI = b'WNLJBbS_9DWAkQQIS6L9F1zc-2Hpqlv-KygYN3OLJBM='       # OJO --> Sustituir aquí por la clave buena
+
+
 lock = threading.Lock()
 
 # Argumentos y configuraciones
@@ -67,15 +73,16 @@ consumer_actualizacion_mapa = KafkaConsumer(
 
 def comprobarEstadoAlarma():
     global destino, letraUbicacion, estadoEmergencia
+    global CLAVE_TAXI
 
-    while True:       
+    while True:
         time.sleep(1) 
         print("Comprobando Estado de Emergencia")
         group_id = f"taxi_group_{ID_TAXI}"
         consumer = KafkaConsumer(
             'procesar_viaje',
             bootstrap_servers=[f"{IP_GESTOR}:{PUERTO_GESTOR}"],
-            value_deserializer=lambda v: json.loads(v.decode('utf-8')),
+            value_deserializer=lambda v: v,  # Recibimos bytes
             auto_offset_reset='earliest',
             enable_auto_commit=False,
             group_id=group_id
@@ -87,7 +94,13 @@ def comprobarEstadoAlarma():
             if not(not messages or stop_event.is_set()):
                 for topic_partition, msgs in messages.items():
                     for message in msgs:
-                        info = message.value
+                        # 1) Desciframos con nuestra CLAVE_TAXI
+                        try:
+                            info = decrypt_message(message.value, CLAVE_TAXI)
+                        except Exception as e:
+                            print(f"Error descifrando mensaje: {e}")
+                            continue
+
                         print("Mensaje recibido con ID: " + info['taxi_id'])
                         key = message.key.decode('utf-8') if message.key else None
                         estadoEmergenciaa = info['estadoEmergencia']
@@ -102,7 +115,8 @@ def comprobarEstadoAlarma():
             print(f"Error al recibir la orden del servicio: {e}")
             traceback.print_exc()
         finally:
-            consumer.close() 
+            consumer.close()
+
 
 ############ FUNCIONES #############
 
@@ -244,12 +258,31 @@ def recibirPosicionCliente():
 
 def enviarPosicionTaxi(taxi_id, posicion, antiguaPosicion, finalizado, estadoSensor):
     global token
-    producerTAXI = KafkaProducer(bootstrap_servers=[f"{IP_GESTOR}:{PUERTO_GESTOR}"], value_serializer=lambda v: json.dumps(v).encode('utf-8'))
+    global CLAVE_TAXI
+
+    producerTAXI = KafkaProducer(
+        bootstrap_servers=[f"{IP_GESTOR}:{PUERTO_GESTOR}"],
+        # Mandamos bytes, no JSON
+        value_serializer=lambda v: v
+    )
     topic = 'actualizaciones_taxi'
-    message = {'taxi_id': taxi_id, 'taxi_posicion': posicion, 'viaje_finalizado': finalizado, 'antigua_posicion': antiguaPosicion, 'estado_sensor': estadoSensor, 'token': token}
-    producerTAXI.send(topic, message)
+    
+    # Diccionario en claro
+    clear_message = {
+        'taxi_id': taxi_id,
+        'taxi_posicion': posicion,
+        'viaje_finalizado': finalizado,
+        'antigua_posicion': antiguaPosicion,
+        'estado_sensor': estadoSensor,
+        'token': token
+    }
+
+    # Ciframos con la clave
+    encrypted_message = encrypt_message(clear_message, CLAVE_TAXI)
+
+    producerTAXI.send(topic, key=taxi_id.encode(), value=encrypted_message)
     producerTAXI.flush()
-    print("POSICION ENVIADA A CENTRAL")
+    print("POSICION ENVIADA A CENTRAL (cifrada)")
 
 def conexionSensor():
     global permisoMovimiento
@@ -324,7 +357,6 @@ def movimiento(posX, posY, objetivo, mapa, letraUbicacion):
     else:
         print("Movimiento bloqueado, intentando alternativa.")
         return (posX, posY)  # Quedarse en la posición actual si no se puede avanzar
-
 
 def actualizarPosicion(destino, mapa, letra):
     global ubicacion
@@ -419,6 +451,33 @@ def desconectar_taxi():
             resultado_label.config(text=f"Error al desconectar: {response.text}")
     except requests.exceptions.RequestException as e:
         resultado_label.config(text=f"Error al desconectar: {e}")
+
+###### CIFRADO / DESCIFRADO ########
+
+def encrypt_message(message_dict, key_str):
+    """
+    Cifra un diccionario (message_dict) con la clave (key_str).
+    Devuelve bytes cifrados.
+    """
+    # Convertir la clave a objeto Fernet
+    f = Fernet(key_str)
+    # Convertir el diccionario a JSON y luego a bytes
+    message_bytes = json.dumps(message_dict).encode('utf-8')
+    # Cifrar
+    encrypted_bytes = f.encrypt(message_bytes)
+    return encrypted_bytes
+
+def decrypt_message(encrypted_bytes, key_str):
+    """
+    Descifra el contenido (encrypted_bytes) con la clave (key_str).
+    Devuelve un diccionario.
+    """
+    f = Fernet(key_str)
+    decrypted_bytes = f.decrypt(encrypted_bytes)
+    # Convertir de bytes a diccionario
+    message_dict = json.loads(decrypted_bytes.decode('utf-8'))
+    return message_dict
+
 
 ############## MAIN ################
 
