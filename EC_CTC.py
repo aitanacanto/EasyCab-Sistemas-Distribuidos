@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify                    # type: ignore
 import requests
 import threading
 import time

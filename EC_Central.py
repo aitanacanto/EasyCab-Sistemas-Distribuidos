@@ -8,12 +8,12 @@ import secrets
 from kafka import KafkaProducer, KafkaConsumer, OffsetAndMetadata
 import json
 from flask import Flask, request, jsonify # type: ignore
-from flask_cors import CORS # type: ignore
 import ast
 import mapaPygame
-from threading import Lock
 import EC_API
 from cryptography.fernet import Fernet
+import logging
+from datetime import datetime
 
 # TO-DO --> Hay que hacer una función para desconectar a los taxis ;)
 
@@ -64,6 +64,19 @@ listaEsperaClientes = []
 FIN = "<FIN>"
 OK = "OK"
 
+################## AUDITORÍA ##################
+
+logging.basicConfig(filename='audit_log.txt', level=logging.INFO, format='%(message)s')
+
+def registrar_evento(origen_ip, accion, detalles):
+    evento = {
+        "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        "source_ip": origen_ip,
+        "event": accion,
+        "details": detalles
+    }
+    logging.info(evento)
+
 ################### TOKENS ####################
 
 def leer_tokens():
@@ -109,6 +122,7 @@ def verificarEstadoTrafico():
         print(f"Estado del tráfico: {estado_trafico}")
 
         if estado_trafico == "KO" and not estadoEmergencia:
+            registrar_evento("127.0.0.1", "Cambio en estado del tráfico", {"estado": "KO"})
             activarEmergencia()
             
         if estado_trafico == "OK" and estadoEmergencia:
@@ -519,6 +533,7 @@ def liberar_id_cliente(customer_id):
 def validarUbicacion(id_taxi, conn):
     taxiEncontrado = False
     nuevasLineas = []
+    origen_ip = conn.getpeername()[0]  # Obtiene la IP del cliente
 
     try:
         with open(ARCHIVO_TAXI, 'r') as archivo:
@@ -547,6 +562,7 @@ def validarUbicacion(id_taxi, conn):
                 nuevasLineas.append(linea)
 
         if not taxiEncontrado:
+            registrar_evento(origen_ip, "Autenticación fallida", {"taxi_id": id_taxi})
             conn.send(FIN.encode(FORMAT))
             return
 

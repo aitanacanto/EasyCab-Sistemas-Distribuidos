@@ -1,8 +1,7 @@
 from flask import Flask, request, jsonify           # type: ignore
 import os
-import traceback
-import secrets
-import time
+import logging
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -14,6 +13,17 @@ ARCHIVO_CLAVES = "claves.txt"
 if not os.path.exists(ARCHIVO_TAXI):
     with open(ARCHIVO_TAXI, "w") as archivo:
         archivo.write("")  # Crear un archivo vacío
+        
+logging.basicConfig(filename='audit_log.txt', level=logging.INFO, format='%(message)s')
+
+def registrar_evento(origen_ip, accion, detalles):
+    evento = {
+        "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        "source_ip": origen_ip,
+        "event": accion,
+        "details": detalles
+    }
+    logging.info(evento)
 
 def leer_taxis():
     taxis = []
@@ -45,6 +55,8 @@ def guardar_taxis(taxis):
 
 @app.route("/register_taxi", methods=["POST"])
 def register_taxi():
+    origen_ip = request.remote_addr  # Obtiene la IP del cliente
+    registrar_evento(origen_ip, "Intento de registro de taxi", {"taxi_id": request.json.get("taxi_id")})
     try:
         # Validar que se envían datos JSON
         if not request.json:
@@ -161,7 +173,6 @@ def borrarLineaTokens(taxi_id):
     except Exception as e:
         print(f"Error al borrar la línea del taxi {taxi_id}: {e}")
     
-
 @app.route("/unregister_taxi", methods=["POST"])
 def unregister_taxi():
 
