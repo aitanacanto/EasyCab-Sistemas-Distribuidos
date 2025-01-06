@@ -7,11 +7,13 @@ import time
 import secrets
 from kafka import KafkaProducer, KafkaConsumer, OffsetAndMetadata
 import json
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask import Flask, request, jsonify # type: ignore
+import ast
 import mapaPygame
-from threading import Lock
 import EC_API
+from cryptography.fernet import Fernet
+import logging
+from datetime import datetime
 
 # TO-DO --> Hay que hacer una función para desconectar a los taxis ;)
 
@@ -27,6 +29,7 @@ TAMANO_CELDA = 30
 ANCHO_BORDE = 1
 REFRESCO_MAPA = 1
 ARCHIVO_TOKENS = 'token.txt'
+ARCHIVO_CLAVES = 'claves.txt'
 
 global viajeTerminado
 viajeTerminado = False
@@ -60,6 +63,19 @@ listaEsperaClientes = []
 
 FIN = "<FIN>"
 OK = "OK"
+
+################## AUDITORÍA ##################
+
+logging.basicConfig(filename='audit_log.txt', level=logging.INFO, format='%(message)s')
+
+def registrar_evento(origen_ip, accion, detalles):
+    evento = {
+        "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        "source_ip": origen_ip,
+        "event": accion,
+        "details": detalles
+    }
+    logging.info(evento)
 
 ################### TOKENS ####################
 
@@ -106,6 +122,7 @@ def verificarEstadoTrafico():
         print(f"Estado del tráfico: {estado_trafico}")
 
         if estado_trafico == "KO" and not estadoEmergencia:
+            registrar_evento("127.0.0.1", "Cambio en estado del tráfico", {"estado": "KO"})
             activarEmergencia()
             
         if estado_trafico == "OK" and estadoEmergencia:
@@ -137,12 +154,32 @@ def enviarTodosTaxisBase():
 
 def vueltaBase(taxi_id):
     global estadoEmergencia
-    producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
+    
+    producerTaxi = KafkaProducer(
+        bootstrap_servers='localhost:9092',
+        # Ojo, ahora en vez de hacer value_serializer de JSON
+        # lo vamos a mandar en bytes ya cifrados
+        value_serializer=lambda v: v
+    )
     topic = 'procesar_viaje'
-    message = {'taxi_id': taxi_id, 'posDestino': (1, 1), 'letraDestino': "Base", 'estadoEmergencia': True}
-    producerTaxi.send(topic, key=taxi_id.encode(), value=message)
+
+    # Creamos el mensaje en claro
+    clear_message = {
+        'taxi_id': taxi_id,
+        'posDestino': (1, 1),
+        'letraDestino': "Base",
+        'estadoEmergencia': True
+    }
+
+    # 1) Leemos la clave para este taxi
+    key_str = leer_clave_de_fichero(taxi_id)
+    # 2) Ciframos
+    encrypted_message = encrypt_message(clear_message, key_str)
+
+    # 3) Enviamos el mensaje cifrado
+    producerTaxi.send(topic, key=taxi_id.encode(), value=encrypted_message)
     producerTaxi.flush()
-    print(f"Enviado orden de ir a la BASE al taxi: {taxi_id}")
+    print(f"Enviado orden de ir a la BASE cifrado al taxi: {taxi_id}")
 
 #################### KAFKA #####################
 
@@ -291,10 +328,11 @@ def recibirMensajeTaxi():
     consumer = KafkaConsumer(
         'actualizaciones_taxi',
         bootstrap_servers='localhost:9092',
-        value_deserializer=lambda v: json.loads(v.decode('utf-8')),
-        auto_offset_reset='earliest',  # Leer desde el principio si es necesario
-        enable_auto_commit=True,        # Permite confirmar automáticamente los offsets
-        group_id='central_taxi_group'   # Asegurar que el grupo es el adecuado
+        # value_deserializer=None -> Porque vamos a recibir bytes cifrados
+        value_deserializer=lambda v: v, 
+        auto_offset_reset='earliest', 
+        enable_auto_commit=True,        
+        group_id='central_taxi_group'
     )
 
     peticiones = []
@@ -309,22 +347,52 @@ def recibirMensajeTaxi():
 
             for topic_partition, records in message.items():
                 for record in records:
-                    print("RECIBIDO ORDEN")
-                    taxi_status = record.value
-                    taxi_id = taxi_status.get('taxi_id')
-                    taxi_posicion = taxi_status.get('taxi_posicion')
-                    viaje_finalizado = taxi_status.get('viaje_finalizado')
-                    antigua_posicion = taxi_status.get('antigua_posicion')
-                    estado_sensor = taxi_status.get('estado_sensor')
+                    print("RECIBIDO ORDEN CIFRADA")
+                    
+                    # 1) Obtenemos el taxi_id a partir de la key
+                    #    (porque record.value está cifrado y no lo podemos parsear tal cual)
+                    if record.key:
+                        taxi_id = record.key.decode('utf-8')
+                    else:
+                        taxi_id = None
+                    
+                    if not taxi_id:
+                        print("No se ha recibido taxi_id en la key. Ignorando mensaje.")
+                        continue
+
+                    # 2) Descifrar el value (record.value) con la clave de este taxi
+                    key_str = leer_clave_de_fichero(taxi_id)
+                    try:
+                        taxi_status = decrypt_message(record.value, key_str)
+                    except Exception as e:
+                        print(f"Error descifrando el mensaje para taxi {taxi_id}: {e}")
+                        continue
+
+                    # 3) Ahora ya procesas igual que antes
+                    print(f"Mensaje descifrado para taxi {taxi_id}: {taxi_status}")
+
+                    # ...
+                    # (El resto sigue igual, usando 'taxi_status.get(...)')
+                    # ...
                     token = taxi_status.get('token')
                     
                     tokens = leer_tokens()
                     if taxi_id in tokens and tokens[taxi_id] == token:
                         print(f"Token válido para taxi {taxi_id}. Procesando mensaje.")
-                        peticion = (taxi_id, taxi_posicion, viaje_finalizado, antigua_posicion, estado_sensor)
+                        peticion = (
+                            taxi_id, 
+                            taxi_status.get('taxi_posicion'), 
+                            taxi_status.get('viaje_finalizado'), 
+                            taxi_status.get('antigua_posicion'), 
+                            taxi_status.get('estado_sensor')
+                        )
                         peticiones.append(peticion)
                     else:
                         print(f"Token inválido para taxi {taxi_id}. Ignorando mensaje.")
+<<<<<<< HEAD
+=======
+
+>>>>>>> Levan
         return peticiones
 
     except Exception as e:
@@ -469,6 +537,7 @@ def liberar_id_cliente(customer_id):
 def validarUbicacion(id_taxi, conn):
     taxiEncontrado = False
     nuevasLineas = []
+    origen_ip = conn.getpeername()[0]  # Obtiene la IP del cliente
 
     try:
         with open(ARCHIVO_TAXI, 'r') as archivo:
@@ -482,23 +551,27 @@ def validarUbicacion(id_taxi, conn):
             if taxi_id == id_taxi:
                 taxiEncontrado = True
                 nuevo_token = generar_token()
-                mensaje = f"<{OK}><{pos_x}><{pos_y}><{nuevo_token}>"
+                nueva_clave = generar_cifrado()
+                mensaje = f"<{OK}><{pos_x}><{pos_y}><{nuevo_token}><{nueva_clave.decode()}>"
                 conn.send(mensaje.encode(FORMAT))
 
                 # Actualizar el archivo de tokens
                 with open(ARCHIVO_TOKENS, 'a') as archivo_tokens:
                     archivo_tokens.write(f"{taxi_id}:{nuevo_token}\n")
+                    
+                with open(ARCHIVO_CLAVES, 'a') as archivo_claves:
+                    archivo_claves.write(f"{taxi_id}:{nueva_clave}\n")
 
             else:
                 nuevasLineas.append(linea)
 
         if not taxiEncontrado:
+            registrar_evento(origen_ip, "Autenticación fallida", {"taxi_id": id_taxi})
             conn.send(FIN.encode(FORMAT))
             return
 
     except Exception as e:
         print(f"EXCEPCIÓN ---> No se ha podido comunicar con el taxi: {e}")
-
 
 def verificacionTaxi(conn, addr):
     try:
@@ -704,6 +777,46 @@ def leerMapaFichero():
                 print(f"Línea malformada: {linea}")
 
     return arrayPos
+
+############### CIFRADO / DESCIFRADO ##############
+
+def leer_clave_de_fichero(taxi_id):
+    with open("claves.txt", "r") as f:
+        for linea in f:
+            partes = linea.strip().split(":")  # ["1", "b'...'"]
+            if partes[0] == taxi_id:
+                # Partes[1] es "b'WNLJBbS_9DWAkQQIS6L9F1zc-2Hpqlv-KygYN3OLJBM='"
+                # lo convertimos a bytes reales
+                key_bytes = ast.literal_eval(partes[1])
+                return key_bytes
+    return None
+
+def encrypt_message(message_dict, key_str):
+    """
+    Cifra un diccionario (message_dict) con la clave (key_str).
+    Devuelve bytes cifrados.
+    """
+    # Convertir la clave a objeto Fernet
+    f = Fernet(key_str)
+    # Convertir el diccionario a JSON y luego a bytes
+    message_bytes = json.dumps(message_dict).encode('utf-8')
+    # Cifrar
+    encrypted_bytes = f.encrypt(message_bytes)
+    return encrypted_bytes
+
+def decrypt_message(encrypted_bytes, key_str):
+    """
+    Descifra el contenido (encrypted_bytes) con la clave (key_str).
+    Devuelve un diccionario.
+    """
+    f = Fernet(key_str)
+    decrypted_bytes = f.decrypt(encrypted_bytes)
+    # Convertir de bytes a diccionario
+    message_dict = json.loads(decrypted_bytes.decode('utf-8'))
+    return message_dict
+
+def generar_cifrado():
+    return Fernet.generate_key()
 
 arrayPos = leerMapaFichero()
 meterTaxisBaseDatos(arrayPos)

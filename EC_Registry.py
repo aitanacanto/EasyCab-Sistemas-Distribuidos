@@ -1,18 +1,29 @@
 from flask import Flask, request, jsonify           # type: ignore
 import os
-import traceback
-import secrets
-import time
+import logging
+from datetime import datetime
 
 app = Flask(__name__)
 
 # Archivo existente de taxis
 ARCHIVO_TAXI = "taxi.txt"
 ARCHIVO_TOKENS = "token.txt"
+ARCHIVO_CLAVES = "claves.txt"
 # Crear el archivo de taxis si no existe
 if not os.path.exists(ARCHIVO_TAXI):
     with open(ARCHIVO_TAXI, "w") as archivo:
         archivo.write("")  # Crear un archivo vacío
+        
+logging.basicConfig(filename='audit_log.txt', level=logging.INFO, format='%(message)s')
+
+def registrar_evento(origen_ip, accion, detalles):
+    evento = {
+        "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        "source_ip": origen_ip,
+        "event": accion,
+        "details": detalles
+    }
+    logging.info(evento)
 
 def leer_taxis():
     taxis = []
@@ -44,6 +55,8 @@ def guardar_taxis(taxis):
 
 @app.route("/register_taxi", methods=["POST"])
 def register_taxi():
+    origen_ip = request.remote_addr  # Obtiene la IP del cliente
+    registrar_evento(origen_ip, "Intento de registro de taxi", {"taxi_id": request.json.get("taxi_id")})
     try:
         # Validar que se envían datos JSON
         if not request.json:
@@ -112,6 +125,30 @@ def borrar_taxi(taxi_id):
         for linea in lista_taxis:
             archivo.write(linea)
 
+def borrarLineaClave(taxi_id):
+    try:
+        nuevas_lineas = []
+
+        # Leer el archivo de tokens y filtrar las líneas
+        with open(ARCHIVO_CLAVES, "r") as archivo:
+            lineas = archivo.readlines()
+
+        for linea in lineas:
+            id_actual, _ = linea.strip().split(":")
+            if id_actual != taxi_id:  # Mantener solo las líneas que no coincidan con el taxi_id
+                nuevas_lineas.append(linea)
+
+        # Escribir las líneas filtradas de vuelta en el archivo
+        with open(ARCHIVO_CLAVES, "w") as archivo:
+            archivo.writelines(nuevas_lineas)
+
+        print(f"Taxi {taxi_id} eliminado correctamente del archivo de claves.")
+
+    except FileNotFoundError:
+        print(f"Error: El archivo {ARCHIVO_CLAVES} no existe.")
+    except Exception as e:
+        print(f"Error al borrar la línea del taxi {taxi_id}: {e}")
+
 def borrarLineaTokens(taxi_id):
     try:
         nuevas_lineas = []
@@ -136,7 +173,6 @@ def borrarLineaTokens(taxi_id):
     except Exception as e:
         print(f"Error al borrar la línea del taxi {taxi_id}: {e}")
     
-
 @app.route("/unregister_taxi", methods=["POST"])
 def unregister_taxi():
 
@@ -160,6 +196,7 @@ def unregister_taxi():
 
         borrar_taxi(taxi_id)
         borrarLineaTokens(taxi_id)
+        borrarLineaClave(taxi_id)
 
         return jsonify({"mensaje": f"Taxi {taxi_id} desconectado correctamente"}), 200
 
