@@ -186,7 +186,7 @@ def vueltaBase(taxi_id):
 def meterEnMapa(pos_x, pos_y, elemento, estado_taxi):
     mapa[pos_x][pos_y] = elemento
     mapa[1][1] = 'X'
-    mapaPygame.actualizar_mapa_pygame(mapa, estado_taxi)
+    mapaPygame.actualizar_mapa_pygame(mapa, estado_taxi, "OK")
     EC_API.actualizar_mapa(mapa)
     
 def envioMuchasPeticiones(peticion, customerXtaxis, peticionesXtaxis, taxi):
@@ -197,7 +197,7 @@ def envioMuchasPeticiones(peticion, customerXtaxis, peticionesXtaxis, taxi):
     
     for unDestino in peticion:
         if not estadoEmergencia:
-
+            # Verificar si hay emergencia
             if estadoEmergencia:
                 print(f"Emergencia activada. Taxi {taxi[0]} enviado directamente a la base.")
                 vueltaBase(taxi[0])
@@ -273,7 +273,7 @@ def conexionKafka():
                     hiloSolicitudes.start()
                 else:
                     listaEsperaClientes.append(peticion)
-                    time.sleep(4)                                   
+                    time.sleep(4)                                   # Lo ponemos en la lista de espera y nos esperamos 4 segundos
                 
 
         movimientosTaxi = recibirMensajeTaxi()
@@ -389,10 +389,7 @@ def recibirMensajeTaxi():
                         peticiones.append(peticion)
                     else:
                         print(f"Token inválido para taxi {taxi_id}. Ignorando mensaje.")
-<<<<<<< HEAD
-=======
 
->>>>>>> Levan
         return peticiones
 
     except Exception as e:
@@ -631,7 +628,7 @@ def cambiarPosicionTaxiMapa(taxi_id, taxi_posicion, antigua_posicion, estado_sen
         mapa[taxi_posicion[0]][taxi_posicion[1]] = f"{taxi_id}r"
 
     estado_taxi = leerEstadosDeTaxis(estado_sensor, "")
-    mapaPygame.actualizar_mapa_pygame(mapa, estado_taxi)
+    mapaPygame.actualizar_mapa_pygame(mapa, estado_taxi, OK)
     EC_API.actualizar_mapa(mapa)
 
 ################## BASE DE DATOS ##################
