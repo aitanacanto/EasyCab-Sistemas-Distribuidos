@@ -29,6 +29,7 @@ TAMANO_CELDA = 30
 ANCHO_BORDE = 1
 REFRESCO_MAPA = 1
 ARCHIVO_TOKENS = 'token.txt'
+ARCHIVO_CLAVES = 'claves.txt'
 
 global viajeTerminado
 viajeTerminado = False
@@ -531,12 +532,16 @@ def validarUbicacion(id_taxi, conn):
             if taxi_id == id_taxi:
                 taxiEncontrado = True
                 nuevo_token = generar_token()
-                mensaje = f"<{OK}><{pos_x}><{pos_y}><{nuevo_token}>"
+                nueva_clave = generar_cifrado()
+                mensaje = f"<{OK}><{pos_x}><{pos_y}><{nuevo_token}><{nueva_clave.decode()}>"
                 conn.send(mensaje.encode(FORMAT))
 
                 # Actualizar el archivo de tokens
                 with open(ARCHIVO_TOKENS, 'a') as archivo_tokens:
                     archivo_tokens.write(f"{taxi_id}:{nuevo_token}\n")
+                    
+                with open(ARCHIVO_CLAVES, 'a') as archivo_claves:
+                    archivo_claves.write(f"{taxi_id}:{nueva_clave}\n")
 
             else:
                 nuevasLineas.append(linea)
@@ -790,6 +795,8 @@ def decrypt_message(encrypted_bytes, key_str):
     message_dict = json.loads(decrypted_bytes.decode('utf-8'))
     return message_dict
 
+def generar_cifrado():
+    return Fernet.generate_key()
 
 arrayPos = leerMapaFichero()
 meterTaxisBaseDatos(arrayPos)

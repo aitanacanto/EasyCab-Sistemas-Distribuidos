@@ -13,8 +13,8 @@ from cryptography.fernet import Fernet
 BASE_URL = "http://localhost:5001"
 
 
-CLAVE_TAXI = b'WNLJBbS_9DWAkQQIS6L9F1zc-2Hpqlv-KygYN3OLJBM='       # OJO --> Sustituir aquí por la clave buena
-
+#CLAVE_TAXI = b'WNLJBbS_9DWAkQQIS6L9F1zc-2Hpqlv-KygYN3OLJBM='       # OJO --> Sustituir aquí por la clave buena
+CLAVE_TAXI = b''
 
 lock = threading.Lock()
 
@@ -31,6 +31,9 @@ KO = "KO"
 
 global token
 token = ''
+
+global clave
+clave = b''
 
 ALTO = 20
 ANCHO = 20
@@ -76,47 +79,48 @@ def comprobarEstadoAlarma():
     global CLAVE_TAXI
 
     while True:
-        time.sleep(1) 
-        print("Comprobando Estado de Emergencia")
-        group_id = f"taxi_group_{ID_TAXI}"
-        consumer = KafkaConsumer(
-            'procesar_viaje',
-            bootstrap_servers=[f"{IP_GESTOR}:{PUERTO_GESTOR}"],
-            value_deserializer=lambda v: v,  # Recibimos bytes
-            auto_offset_reset='earliest',
-            enable_auto_commit=False,
-            group_id=group_id
-        )
+        time.sleep(1)
+        
+        if CLAVE_TAXI != b'':
+            print("Comprobando Estado de Emergencia")
+            group_id = f"taxi_group_{ID_TAXI}"
+            consumer = KafkaConsumer(
+                'procesar_viaje',
+                bootstrap_servers=[f"{IP_GESTOR}:{PUERTO_GESTOR}"],
+                value_deserializer=lambda v: v,  # Recibimos bytes
+                auto_offset_reset='earliest',
+                enable_auto_commit=False,
+                group_id=group_id
+            )
 
-        try:
-            messages = consumer.poll(timeout_ms=1000) 
+            try:
+                messages = consumer.poll(timeout_ms=1000) 
 
-            if not(not messages or stop_event.is_set()):
-                for topic_partition, msgs in messages.items():
-                    for message in msgs:
-                        # 1) Desciframos con nuestra CLAVE_TAXI
-                        try:
-                            info = decrypt_message(message.value, CLAVE_TAXI)
-                        except Exception as e:
-                            print(f"Error descifrando mensaje: {e}")
-                            continue
+                if not(not messages or stop_event.is_set()):
+                    for topic_partition, msgs in messages.items():
+                        for message in msgs:
+                            # 1) Desciframos con nuestra CLAVE_TAXI
+                            try:
+                                info = decrypt_message(message.value, CLAVE_TAXI)
+                            except Exception as e:
+                                print(f"Error descifrando mensaje: {e}")
+                                continue
 
-                        print("Mensaje recibido con ID: " + info['taxi_id'])
-                        key = message.key.decode('utf-8') if message.key else None
-                        estadoEmergenciaa = info['estadoEmergencia']
-                        if estadoEmergenciaa:
-                            print("VOLVER A BASE!!!!!!!!")
-                            destino = (1,1)
-                            estadoEmergencia = True
-                            if key == ID_TAXI or info['taxi_id'] == ID_TAXI:
-                                consumer.commit({topic_partition: OffsetAndMetadata(message.offset + 1, None)})
-                            
-        except Exception as e:
-            print(f"Error al recibir la orden del servicio: {e}")
-            traceback.print_exc()
-        finally:
-            consumer.close()
-
+                            print("Mensaje recibido con ID: " + info['taxi_id'])
+                            key = message.key.decode('utf-8') if message.key else None
+                            estadoEmergenciaa = info['estadoEmergencia']
+                            if estadoEmergenciaa:
+                                print("VOLVER A BASE!!!!!!!!")
+                                destino = (1,1)
+                                estadoEmergencia = True
+                                if key == ID_TAXI or info['taxi_id'] == ID_TAXI:
+                                    consumer.commit({topic_partition: OffsetAndMetadata(message.offset + 1, None)})
+                                
+            except Exception as e:
+                print(f"Error al recibir la orden del servicio: {e}")
+                traceback.print_exc()
+            finally:
+                consumer.close()
 
 ############ FUNCIONES #############
 
@@ -395,7 +399,7 @@ def registrar_taxi_en_registry(taxi_id, pos_x, pos_y):
         sys.exit(1)
 
 def validarID(socketCentral):
-    global ubicacion, token
+    global ubicacion, token, CLAVE_TAXI
     socketCentral.send(ID_TAXI.encode())
     respuesta = socketCentral.recv(4096).decode()
 
@@ -407,6 +411,7 @@ def validarID(socketCentral):
         datos = respuesta.strip().replace('<', '').split('>')
         ubicacion = (int(datos[1]), int(datos[2]))
         token = datos[3]  # Actualizar el token
+        CLAVE_TAXI = datos[4].encode()
         print(f"ID asignado con éxito. Token recibido: {token}")
 
 def conectarConServidor():
@@ -477,7 +482,6 @@ def decrypt_message(encrypted_bytes, key_str):
     # Convertir de bytes a diccionario
     message_dict = json.loads(decrypted_bytes.decode('utf-8'))
     return message_dict
-
 
 ############## MAIN ################
 
