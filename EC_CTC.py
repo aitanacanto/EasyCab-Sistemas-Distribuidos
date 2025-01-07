@@ -4,6 +4,7 @@ import threading
 import time
 import tkinter as tk
 from tkinter import messagebox
+import sys
 
 app = Flask(__name__)
 
@@ -11,8 +12,21 @@ app = Flask(__name__)
 ciudad_actual = "Benidorm"
 estado_trafico = "OK"
 
+if len(sys.argv) != 2:
+    print("ERROR: Número de argumentos incorrecto")
+    print("Formato correcto -> python3 EC_CTC.py <archivo_APIKEY>")
+    sys.exit(1)
+
+argumentos = sys.argv
+ARCHIVO_APIKEY = argumentos[1]
+
 # API Key y URL base de OpenWeather
-API_KEY = "removed"
+#API_KEY = "removed"
+
+with open(ARCHIVO_APIKEY, "r") as archivo:
+    API_KEY = archivo.readline().strip()
+
+        
 URL_BASE = "http://api.openweathermap.org/data/2.5/weather"
 
 # Función para actualizar el estado del tráfico periódicamente

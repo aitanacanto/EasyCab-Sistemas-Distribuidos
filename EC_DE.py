@@ -21,7 +21,7 @@ lock = threading.Lock()
 # Argumentos y configuraciones
 if len(sys.argv) != 8:
     print("ERROR: Número de argumentos incorrecto")
-    print("Formato correcto -> python3 EC_DE <IP central> <Puerto central> <IP gestor> <Puerto gestor> <IP Sensor> <Puerto Sensor> <ID Taxi>")
+    print("Formato correcto -> python3 EC_DE.py <IP central> <Puerto central> <IP gestor> <Puerto gestor> <IP Sensor> <Puerto Sensor> <ID Taxi>")
     sys.exit(1)
 
 argumentos = sys.argv
@@ -154,7 +154,7 @@ def realizarViaje():
             if ubicacion == (1,1) and estadoEmergencia:
                 print("Taxi ha llegado a la base.")
                 enviarPosicionTaxi(ID_TAXI, ubicacion, antiguaPosicion, True, OK)
-                time.sleep(2)
+                time.sleep(1)
                 desconectar_taxi()
                 break
             
@@ -221,33 +221,39 @@ def recibirPosicionCliente():
         consumer = KafkaConsumer(
             'procesar_viaje',
             bootstrap_servers=[f"{IP_GESTOR}:{PUERTO_GESTOR}"],
-            value_deserializer=lambda v: json.loads(v.decode('utf-8')),  # Asegúrate de que los mensajes sean JSON
+            value_deserializer=lambda v: v,                     # Asegúrate de que los mensajes sean JSON
             auto_offset_reset='earliest',
             enable_auto_commit=False,
             group_id=f"taxi_group_{ID_TAXI}"
         )
 
         try:
-            messages = consumer.poll(timeout_ms=1000) 
+            messages = consumer.poll(timeout_ms=1000)
             if not messages or stop_event.is_set():
                 return False
 
             for topic_partition, msgs in messages.items():
                 for message in msgs:
                     try:
-                        info = message.value  # Intentar decodificar el mensaje
-                        print(f"Mensaje recibido: {info}")
-                    except json.JSONDecodeError:
-                        print("Mensaje malformado o vacío. Ignorado.")
+                        info = decrypt_message(message.value, CLAVE_TAXI)
+                    except Exception as e:
+                        print(f"Error descifrando mensaje: {e}")
+                        continue
+                    print(f"Mensaje recibido: {info}")
+
+                    # Validar que el mensaje tenga una clave válida
+                    if not message.key or message.key.decode('utf-8') != ID_TAXI:
+                        print("Mensaje sin clave válida o no dirigido a este taxi. Ignorado.")
                         continue
 
-                    if message.key and message.key.decode('utf-8') == ID_TAXI:
-                        estadoEmergencia = info.get('estadoEmergencia', False)
-                        letraUbicacion = info.get('letraDestino', None)
-                        destino = (1, 1) if estadoEmergencia else info.get('posDestino')
-                        consumer.commit({topic_partition: OffsetAndMetadata(message.offset + 1, None)})
-                        print("RECIBIDO ORDEN DE VIAJE")
-                        return True
+                    # Procesar el mensaje
+                    estadoEmergencia = info.get('estadoEmergencia', False)
+                    letraUbicacion = info.get('letraDestino')
+                    destino = (1, 1) if estadoEmergencia else info.get('posDestino')
+
+                    print(f"Orden procesada. Destino: {destino}, Emergencia: {estadoEmergencia}")
+                    consumer.commit({topic_partition: OffsetAndMetadata(message.offset + 1, None)})
+                    return True
         except Exception as e:
             print(f"Error al recibir la orden del servicio: {e}")
             traceback.print_exc()
@@ -255,7 +261,6 @@ def recibirPosicionCliente():
             consumer.close()
 
         return False
-
 
 def enviarPosicionTaxi(taxi_id, posicion, antiguaPosicion, finalizado, estadoSensor):
     global token
@@ -418,7 +423,6 @@ def validarID(socketCentral):
             socketCentral.close()
             sys.exit(1)
 
-
 def conectarConServidor():
     global socketCentral
     socketCentral = socket.socket()
@@ -449,6 +453,7 @@ def conectar_taxi():
         print(f"Error al conectar: {e}")
 
 def desconectar_taxi():
+    print("DESCONECTANDO TAXI...")
     try:
         url = f"{BASE_URL}/unregister_taxi"
         payload = {
