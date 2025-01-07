@@ -218,51 +218,49 @@ def recibirActualizacionMapa():
 def recibirPosicionCliente():
     global destino, letraUbicacion, estadoEmergencia
     with lock:
-        # Consumidor para procesar el viaje (cada taxi debe tener un group_id único)
-        group_id = f"taxi_group_{ID_TAXI}"
         consumer = KafkaConsumer(
             'procesar_viaje',
             bootstrap_servers=[f"{IP_GESTOR}:{PUERTO_GESTOR}"],
-            value_deserializer=lambda v: json.loads(v.decode('utf-8')),
+            value_deserializer=lambda v: json.loads(v.decode('utf-8')),  # Asegúrate de que los mensajes sean JSON
             auto_offset_reset='earliest',
             enable_auto_commit=False,
-            group_id=group_id
+            group_id=f"taxi_group_{ID_TAXI}"
         )
 
         try:
             messages = consumer.poll(timeout_ms=1000) 
-
             if not messages or stop_event.is_set():
                 return False
 
             for topic_partition, msgs in messages.items():
                 for message in msgs:
-                    info = message.value
-                    print("Mensaje recibido con ID: " + info['taxi_id'])
-                    key = message.key.decode('utf-8') if message.key else None
-                    if key == ID_TAXI or info['taxi_id'] == ID_TAXI:
-                        estadoEmergencia = info['estadoEmergencia']
-                        letraUbicacion = info['letraDestino']
+                    try:
+                        info = message.value  # Intentar decodificar el mensaje
+                        print(f"Mensaje recibido: {info}")
+                    except json.JSONDecodeError:
+                        print("Mensaje malformado o vacío. Ignorado.")
+                        continue
+
+                    if message.key and message.key.decode('utf-8') == ID_TAXI:
+                        estadoEmergencia = info.get('estadoEmergencia', False)
+                        letraUbicacion = info.get('letraDestino', None)
+                        destino = (1, 1) if estadoEmergencia else info.get('posDestino')
                         consumer.commit({topic_partition: OffsetAndMetadata(message.offset + 1, None)})
                         print("RECIBIDO ORDEN DE VIAJE")
-                        
-                        if estadoEmergencia:
-                            destino = (1,1)
-                        else:
-                            destino = info['posDestino']
-                            
                         return True
         except Exception as e:
             print(f"Error al recibir la orden del servicio: {e}")
             traceback.print_exc()
         finally:
-            consumer.close() 
+            consumer.close()
 
         return False
+
 
 def enviarPosicionTaxi(taxi_id, posicion, antiguaPosicion, finalizado, estadoSensor):
     global token
     global CLAVE_TAXI
+    global letraUbicacion
 
     producerTAXI = KafkaProducer(
         bootstrap_servers=[f"{IP_GESTOR}:{PUERTO_GESTOR}"],
@@ -278,7 +276,8 @@ def enviarPosicionTaxi(taxi_id, posicion, antiguaPosicion, finalizado, estadoSen
         'viaje_finalizado': finalizado,
         'antigua_posicion': antiguaPosicion,
         'estado_sensor': estadoSensor,
-        'token': token
+        'token': token,
+        'letra': letraUbicacion
     }
 
     # Ciframos con la clave
@@ -410,9 +409,15 @@ def validarID(socketCentral):
     else:
         datos = respuesta.strip().replace('<', '').split('>')
         ubicacion = (int(datos[1]), int(datos[2]))
-        token = datos[3]  # Actualizar el token
-        CLAVE_TAXI = datos[4].encode()
-        print(f"ID asignado con éxito. Token recibido: {token}")
+        token = datos[3]
+        try:
+            CLAVE_TAXI = bytes(datos[4], 'utf-8')  # Configura la clave correctamente
+            print(f"ID asignado con éxito. Token recibido: {token}")
+        except Exception as e:
+            print(f"Error al asignar clave: {e}")
+            socketCentral.close()
+            sys.exit(1)
+
 
 def conectarConServidor():
     global socketCentral

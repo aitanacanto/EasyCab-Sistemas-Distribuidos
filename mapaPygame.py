@@ -117,29 +117,27 @@ def manejar_eventos_botones(evento, botones_taxis):
         mouse_pos = evento.pos
         for boton_rect, taxi_id in botones_taxis:
             if boton_rect.collidepoint(mouse_pos):
-                print(f"Taxi {taxi_id} vuelve a la base")  # Confirmar acción en la consola
-                from EC_Central import vueltaBase  # Importar la función
-                vueltaBase(taxi_id)  # Llamar a la función para enviar al taxi a la base
+                print(f"Taxi {taxi_id} vuelve a la base")
+                from EC_Central import vueltaBase
+                vueltaBase(taxi_id)
 
-# Actualizar el mapa: agregar a la cola para ser procesado por el hilo principal
+
 def actualizar_mapa_pygame(mapa_data, estados_taxis):
     cola_actualizaciones.put((mapa_data, estados_taxis))
 
 def main_pygame_loop():
     running = True
-    botones_taxis = []  # Variable para almacenar los botones de taxis
+    botones_taxis = []
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            manejar_eventos_botones(event, botones_taxis)  # Pasar los botones para manejar los clics
+            manejar_eventos_botones(event, botones_taxis)
 
-        # Ver si hay actualizaciones en la cola
         while not cola_actualizaciones.empty():
             mapa_data, estados_taxis = cola_actualizaciones.get()
-            botones_taxis = dibujar_mapa(mapa_data, estados_taxis)  # Actualizar botones
+            botones_taxis = dibujar_mapa(mapa_data, estados_taxis)
 
-        # Limitar la tasa de actualización a 30 FPS
         clock.tick(30)
 
     pygame.quit()

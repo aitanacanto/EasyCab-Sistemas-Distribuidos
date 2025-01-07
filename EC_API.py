@@ -22,7 +22,7 @@ def obtener_mapa():
 
 # Función para iniciar la API en un hilo
 def iniciar_api():
-    app.run(host="0.0.0.0", port=5002, debug=False)
+    app.run(host="0.0.0.0", port=5003, debug=False)
 
 # Función para actualizar el mapa desde EC_Central
 def actualizar_mapa(nuevo_mapa):

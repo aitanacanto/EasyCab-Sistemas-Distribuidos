@@ -138,7 +138,7 @@
 
     const fetchMapa = async () => {
       try {
-        const response = await fetch("http://localhost:5002/mapa");
+        const response = await fetch("http://localhost:5003/mapa");
         if (!response.ok) {
           throw new Error(`Error al obtener el mapa: ${response.status}`);
         }
