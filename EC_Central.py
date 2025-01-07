@@ -737,6 +737,7 @@ def cambiarEstadoTaxiFichero(id_taxi, operativo):
             print(f"EXCEPCIÓN ---> No se ha podido comunicar con la base de datos del taxi: {e}")
 
 def actualizarPosicionTaxiFichero(id_taxi, posicion, finalizado, estadoSensor):
+    global estadoEmergencia
     with lock:
         nuevo_x, nuevo_y = posicion
         
@@ -762,7 +763,10 @@ def actualizarPosicionTaxiFichero(id_taxi, posicion, finalizado, estadoSensor):
                     taxi_y = str(nuevo_y)
                     taxiActualizado = True
 
-                    if finalizado and not posicion == (1,1):
+                    if estadoEmergencia and posicion[0] <= 3 and posicion[1] <= 3:
+                        nueva_linea = f"<NO><NO><{taxi_id}><{taxi_x}><{taxi_y}>\n"
+
+                    elif finalizado and not posicion == (1,1):
                         nueva_linea = f"<SI><SI><{taxi_id}><{taxi_x}><{taxi_y}>\n"
                     elif estadoSensor == FIN:
                         nueva_linea = f"<NO><NO><{taxi_id}><{taxi_x}><{taxi_y}>\n"
