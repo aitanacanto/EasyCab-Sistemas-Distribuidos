@@ -102,24 +102,7 @@ def dibujar_tabla_estados(estados_taxis):
             estado_surface = font.render(texto, True, COLOR_TEXTO)
             screen.blit(estado_surface, (10, y_offset))
 
-            boton_rect = pygame.Rect(300, y_offset - 5, 150, 20)
-            pygame.draw.rect(screen, COLOR_AMARILLO, boton_rect)
-            boton_texto = font.render("Volver a la base", True, COLOR_TEXTO)
-            screen.blit(boton_texto, (boton_rect.x + 5, boton_rect.y))
-            botones_taxis.append((boton_rect, estado['id']))
-
             y_offset += 30
-
-    return botones_taxis
-
-def manejar_eventos_botones(evento, botones_taxis):
-    if evento.type == pygame.MOUSEBUTTONDOWN:
-        mouse_pos = evento.pos
-        for boton_rect, taxi_id in botones_taxis:
-            if boton_rect.collidepoint(mouse_pos):
-                print(f"Taxi {taxi_id} vuelve a la base")
-                from EC_Central import vueltaBase
-                vueltaBase(taxi_id)
 
 
 def actualizar_mapa_pygame(mapa_data, estados_taxis):
@@ -127,16 +110,14 @@ def actualizar_mapa_pygame(mapa_data, estados_taxis):
 
 def main_pygame_loop():
     running = True
-    botones_taxis = []
+
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            manejar_eventos_botones(event, botones_taxis)
-
         while not cola_actualizaciones.empty():
             mapa_data, estados_taxis = cola_actualizaciones.get()
-            botones_taxis = dibujar_mapa(mapa_data, estados_taxis)
+            dibujar_mapa(mapa_data, estados_taxis)
 
         clock.tick(30)
 
