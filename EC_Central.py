@@ -14,8 +14,20 @@ import EC_API
 from cryptography.fernet import Fernet
 import logging
 from datetime import datetime
+import os
 
-# TO-DO --> Hay que hacer una función para desconectar a los taxis ;)
+ARCHIVO_TOKENS = 'token.txt'
+ARCHIVO_CLAVES = 'claves.txt'
+
+try:
+    if os.path.exists(ARCHIVO_CLAVES):
+        os.remove(ARCHIVO_CLAVES)
+        print(f"Archivo {ARCHIVO_CLAVES} eliminado.")
+    if os.path.exists(ARCHIVO_TOKENS):
+        os.remove(ARCHIVO_TOKENS)
+        print(f"Archivo {ARCHIVO_TOKENS} eliminado.")
+except Exception as e:
+    print(f"Error al eliminar archivos: {e}")
 
 lock = threading.Lock()
 
@@ -28,8 +40,6 @@ CUSTOMERS_ACTIVOS = list((letra, False) for letra in 'abcdefghijklmnopqrstuvwxyz
 TAMANO_CELDA = 30
 ANCHO_BORDE = 1
 REFRESCO_MAPA = 1
-ARCHIVO_TOKENS = 'token.txt'
-ARCHIVO_CLAVES = 'claves.txt'
 
 global viajeTerminado
 viajeTerminado = False
@@ -138,14 +148,12 @@ def enviarTodosTaxisBase():
             lineas = archivo.readlines()
 
         for linea in lineas:
-            # Extraer información del taxi
             datos = linea.strip().replace('<', '').split('>')
             taxi_id = datos[2]  # ID del taxi
             taxi_asignado = datos[0]  # "SI" o "NO"
 
-            # Verificar si el taxi está operativo
             if taxi_asignado == "SI":
-                vueltaBase(taxi_id)  # Llama a la función para enviar el taxi a la base
+                vueltaBase(taxi_id)
 
     except Exception as e:
         print(f"Error al procesar los taxis: {e}")
@@ -153,7 +161,6 @@ def enviarTodosTaxisBase():
     return 
 
 def vueltaBase(taxi_id):
-    global estadoEmergencia
     
     producerTaxi = KafkaProducer(
         bootstrap_servers='localhost:9092',
@@ -307,14 +314,73 @@ def enviarMensajeTaxiMapa():
         producerTaxi.send('actualizar_mapa', value=mapa)
         producerTaxi.flush()
 
+import ast
+import json
+from cryptography.fernet import Fernet
+
+def leer_clave_de_fichero(taxi_id):
+    try:
+        with open("claves.txt", "r") as f:
+            for linea in f:
+                partes = linea.strip().split(":")  # ["1", "b'...'"]
+                if partes[0] == taxi_id:
+                    # Convertir clave en formato "b'...'" a bytes reales
+                    key_bytes = ast.literal_eval(partes[1])
+                    return key_bytes
+        print(f"Clave no encontrada para el taxi {taxi_id}.")
+    except Exception as e:
+        print(f"Error al leer la clave del fichero: {e}")
+    return None
+
+def encrypt_message(message_dict, key_bytes):
+    """
+    Cifra un diccionario (message_dict) con la clave (key_bytes).
+    Devuelve bytes cifrados.
+    """
+    try:
+        # Convertir la clave a objeto Fernet
+        f = Fernet(key_bytes)
+        # Convertir el diccionario a JSON y luego a bytes
+        message_bytes = json.dumps(message_dict).encode('utf-8')
+        # Cifrar
+        encrypted_bytes = f.encrypt(message_bytes)
+        return encrypted_bytes
+    except Exception as e:
+        print(f"Error al cifrar el mensaje: {e}")
+        return None
+
 def enviarMensajeTaxiOrden(taxi_id, destino, letraDestino):
     global estadoEmergencia
-    producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
-    topic = 'procesar_viaje'
-    message = {'taxi_id': taxi_id, 'posDestino': destino, 'letraDestino': letraDestino, 'estadoEmergencia': estadoEmergencia}
-    producerTaxi.send(topic, key=taxi_id.encode(), value=message)
-    producerTaxi.flush()
-    print("Enviado orden de viaje al Taxi " + str(taxi_id))
+    try:
+        # Leer clave del archivo
+        key_bytes = leer_clave_de_fichero(taxi_id)
+        if not key_bytes:
+            print(f"No se pudo obtener la clave para el taxi {taxi_id}.")
+            return
+
+        # Crear el mensaje a enviar
+        message = {
+            'taxi_id': taxi_id,
+            'posDestino': destino,
+            'letraDestino': letraDestino,
+            'estadoEmergencia': estadoEmergencia
+        }
+
+        # Cifrar el mensaje
+        encrypted_message = encrypt_message(message, key_bytes)
+        if not encrypted_message:
+            print(f"No se pudo cifrar el mensaje para el taxi {taxi_id}.")
+            return
+
+        # Enviar mensaje cifrado a Kafka
+        producerTaxi = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: v)
+        topic = 'procesar_viaje'
+        producerTaxi.send(topic, key=taxi_id.encode(), value=encrypted_message)
+        producerTaxi.flush()
+        print("Enviado orden de viaje al Taxi " + str(taxi_id))
+    except Exception as e:
+        print(f"Error al enviar el mensaje al taxi {taxi_id}: {e}")
+
 
 def enviarMensajeCustomer(codigoMensaje, customerID, mensaje):
     producerCustomer = KafkaProducer(bootstrap_servers='localhost:9092', value_serializer=lambda v: json.dumps(v).encode('utf-8'))
@@ -671,6 +737,7 @@ def cambiarEstadoTaxiFichero(id_taxi, operativo):
             print(f"EXCEPCIÓN ---> No se ha podido comunicar con la base de datos del taxi: {e}")
 
 def actualizarPosicionTaxiFichero(id_taxi, posicion, finalizado, estadoSensor):
+    global estadoEmergencia
     with lock:
         nuevo_x, nuevo_y = posicion
         
@@ -696,7 +763,10 @@ def actualizarPosicionTaxiFichero(id_taxi, posicion, finalizado, estadoSensor):
                     taxi_y = str(nuevo_y)
                     taxiActualizado = True
 
-                    if finalizado and not posicion == (1,1):
+                    if estadoEmergencia and posicion[0] <= 3 and posicion[1] <= 3:
+                        nueva_linea = f"<NO><NO><{taxi_id}><{taxi_x}><{taxi_y}>\n"
+
+                    elif finalizado and not posicion == (1,1):
                         nueva_linea = f"<SI><SI><{taxi_id}><{taxi_x}><{taxi_y}>\n"
                     elif estadoSensor == FIN:
                         nueva_linea = f"<NO><NO><{taxi_id}><{taxi_x}><{taxi_y}>\n"

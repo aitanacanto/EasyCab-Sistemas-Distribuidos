@@ -90,6 +90,8 @@ def register_taxi():
                 # Guardar los cambios en el archivo
                 guardar_taxis(taxis)
                 return jsonify({"mensaje": f"Taxi {taxi_id} actualizado y está operativo"}), 200
+            else:
+                print("Taxi encontrado en la base de datos: " + taxi_id)
 
         # Si no está registrado, devolver error
         return jsonify({"error": f"El taxi {taxi_id} no existe en la base de datos"}), 404
@@ -175,7 +177,6 @@ def borrarLineaTokens(taxi_id):
     
 @app.route("/unregister_taxi", methods=["POST"])
 def unregister_taxi():
-
     try:
         print("Solicitud recibida en /unregister_taxi")
         data = request.json
