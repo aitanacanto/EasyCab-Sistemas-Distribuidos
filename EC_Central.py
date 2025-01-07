@@ -16,6 +16,15 @@ import logging
 from datetime import datetime
 import os
 
+FIN = "<FIN>"
+OK = "OK"
+
+global destinos
+destinos = [OK, OK, OK, OK, OK]
+
+global estadostabla
+estadostabla = ['X', 'X', 'X', 'X', 'X', 'X']
+
 ARCHIVO_TOKENS = 'token.txt'
 ARCHIVO_CLAVES = 'claves.txt'
 
@@ -71,8 +80,6 @@ global mapa
 global listaEsperaClientes
 listaEsperaClientes = []
 
-FIN = "<FIN>"
-OK = "OK"
 
 ################## AUDITORÍA ##################
 
@@ -414,7 +421,7 @@ def enviarMensajeCustomer(codigoMensaje, customerID, mensaje):
     producerCustomer.flush()
 
 def recibirMensajeTaxi():
-    global estadoEmergencia
+    global estadoEmergencia, destinos, estadostabla
     
     consumer = KafkaConsumer(
         'actualizaciones_taxi',
@@ -479,6 +486,8 @@ def recibirMensajeTaxi():
                             taxi_status.get('letra')
                         )
                         peticiones.append(peticion)
+                        estadostabla[int(taxi_id)] = peticion[4]
+                        estadostabla[int(taxi_id)] = peticion[5]
                     else:
                         print(f"Token inválido para taxi {taxi_id}. Ignorando mensaje.")
 
@@ -524,9 +533,10 @@ def obtener_lista_ubicaciones(ruta_archivo, lista_letras):
     estados_actualizados = leerEstadosDeTaxis(OK, letra) 
     return solucion
 
-def leerEstadosDeTaxis(estado, destino):
+def leerEstadosDeTaxis(estadooos, destino):
+    estadosTaxi = []
+    global destinos, estadostabla
     
-    estados = []
     with open(ARCHIVO_TAXI, 'r') as archivo:
         lineas = archivo.readlines()
 
@@ -543,13 +553,12 @@ def leerEstadosDeTaxis(estado, destino):
             if taxi_asignado == "SI":
                 solicitud = {
                     "id": taxi_id,
-                    "destino": destino,            # Implementar para poner el destino al que va
-                    "estado": estado
+                    "destino": estadostabla[int(taxi_id)], 
+                    "estado": destinos[int(taxi_id)]
                 }
-            
-                estados.append(solicitud)
+                estadosTaxi.append(solicitud)
 
-    return estados
+    return estadosTaxi
 
 def recibirPeticionesCustomers():
     consumer = KafkaConsumer(
