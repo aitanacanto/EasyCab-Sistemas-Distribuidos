@@ -20,10 +20,10 @@ FIN = "<FIN>"
 OK = "OK"
 
 global destinos
-destinos = [OK, OK, OK, OK, OK]
+destinos = ['X', 'X', 'X', 'X', 'X', 'X']
 
 global estadostabla
-estadostabla = ['X', 'X', 'X', 'X', 'X', 'X']
+estadostabla = [OK, OK, OK, OK, OK]
 
 ARCHIVO_TOKENS = 'token.txt'
 ARCHIVO_CLAVES = 'claves.txt'
@@ -486,8 +486,8 @@ def recibirMensajeTaxi():
                             taxi_status.get('letra')
                         )
                         peticiones.append(peticion)
-                        estadostabla[int(taxi_id)] = peticion[4]
-                        estadostabla[int(taxi_id)] = peticion[5]
+                        destinos[int(taxi_id)] = peticion[4]
+                        destinos[int(taxi_id)] = peticion[5]
                     else:
                         print(f"Token inválido para taxi {taxi_id}. Ignorando mensaje.")
 
@@ -553,8 +553,8 @@ def leerEstadosDeTaxis(estadooos, destino):
             if taxi_asignado == "SI":
                 solicitud = {
                     "id": taxi_id,
-                    "destino": estadostabla[int(taxi_id)], 
-                    "estado": destinos[int(taxi_id)]
+                    "estado":estadostabla[int(taxi_id)], 
+                    "destino": destinos[int(taxi_id)]
                 }
                 estadosTaxi.append(solicitud)
 
