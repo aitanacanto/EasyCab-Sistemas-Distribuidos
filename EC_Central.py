@@ -76,16 +76,40 @@ OK = "OK"
 
 ################## AUDITORÍA ##################
 
-logging.basicConfig(filename='audit_log.txt', level=logging.INFO, format='%(message)s')
+import logging
+
+# Crea un logger específico para la auditoría
+audit_logger = logging.getLogger("mi_auditoria")
+audit_logger.setLevel(logging.INFO)
+
+# Crea un handler para el archivo de logs
+file_handler = logging.FileHandler("audit_log.txt")
+file_handler.setLevel(logging.INFO)
+
+# Define el formato que quieras
+formatter = logging.Formatter('%(message)s') 
+file_handler.setFormatter(formatter)
+
+# Añade el handler a tu logger
+audit_logger.addHandler(file_handler)
+
+logging.getLogger("kafka").setLevel(logging.ERROR)
+logging.getLogger("urllib3").setLevel(logging.ERROR)
+
+EVENTOS_PERMITIDOS = {"Autenticación", "Estado crítico", "Error grave"}
 
 def registrar_evento(origen_ip, accion, detalles):
+    if accion not in EVENTOS_PERMITIDOS:
+        return  # Ignorar eventos no permitidos
+    
     evento = {
         "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         "source_ip": origen_ip,
         "event": accion,
         "details": detalles
     }
-    logging.info(evento)
+    audit_logger.info(evento)
+
 
 ################### TOKENS ####################
 
@@ -132,7 +156,7 @@ def verificarEstadoTrafico():
         print(f"Estado del tráfico: {estado_trafico}")
 
         if estado_trafico == "KO" and not estadoEmergencia:
-            registrar_evento("127.0.0.1", "Cambio en estado del tráfico", {"estado": "KO"})
+            registrar_evento("127.0.0.1", "Estado crítico", {"estado": "KO"})
             activarEmergencia()
             
         if estado_trafico == "OK" and estadoEmergencia:
@@ -631,7 +655,7 @@ def validarUbicacion(id_taxi, conn):
                 nuevasLineas.append(linea)
 
         if not taxiEncontrado:
-            registrar_evento(origen_ip, "Autenticación fallida", {"taxi_id": id_taxi})
+            registrar_evento(origen_ip, "Error grave", {"taxi_id": id_taxi})
             conn.send(FIN.encode(FORMAT))
             return
 

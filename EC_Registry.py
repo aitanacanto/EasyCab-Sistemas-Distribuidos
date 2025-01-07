@@ -13,17 +13,41 @@ ARCHIVO_CLAVES = "claves.txt"
 if not os.path.exists(ARCHIVO_TAXI):
     with open(ARCHIVO_TAXI, "w") as archivo:
         archivo.write("")  # Crear un archivo vacío
-        
-logging.basicConfig(filename='audit_log.txt', level=logging.INFO, format='%(message)s')
+
+import logging
+
+# Crea un logger específico para la auditoría
+audit_logger = logging.getLogger("mi_auditoria")
+audit_logger.setLevel(logging.INFO)
+
+# Crea un handler para el archivo de logs
+file_handler = logging.FileHandler("audit_log.txt")
+file_handler.setLevel(logging.INFO)
+
+# Define el formato que quieras
+formatter = logging.Formatter('%(message)s') 
+file_handler.setFormatter(formatter)
+
+# Añade el handler a tu logger
+audit_logger.addHandler(file_handler)
+
+logging.getLogger("kafka").setLevel(logging.ERROR)
+logging.getLogger("urllib3").setLevel(logging.ERROR)
+
+EVENTOS_PERMITIDOS = {"Autenticación", "Estado crítico", "Error grave"}
 
 def registrar_evento(origen_ip, accion, detalles):
+    if accion not in EVENTOS_PERMITIDOS:
+        return  # Ignorar eventos no permitidos
+    
     evento = {
         "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         "source_ip": origen_ip,
         "event": accion,
         "details": detalles
     }
-    logging.info(evento)
+    audit_logger.info(evento)
+
 
 def leer_taxis():
     taxis = []
@@ -56,7 +80,7 @@ def guardar_taxis(taxis):
 @app.route("/register_taxi", methods=["POST"])
 def register_taxi():
     origen_ip = request.remote_addr  # Obtiene la IP del cliente
-    registrar_evento(origen_ip, "Intento de registro de taxi", {"taxi_id": request.json.get("taxi_id")})
+    registrar_evento(origen_ip, "Autenticación", {"taxi_id": request.json.get("taxi_id")})
     try:
         # Validar que se envían datos JSON
         if not request.json:
@@ -177,6 +201,8 @@ def borrarLineaTokens(taxi_id):
     
 @app.route("/unregister_taxi", methods=["POST"])
 def unregister_taxi():
+    origen_ip = request.remote_addr  # Obtiene la IP del cliente
+    registrar_evento(origen_ip, "Autenticación", {"taxi_id": request.json.get("taxi_id")})
     try:
         print("Solicitud recibida en /unregister_taxi")
         data = request.json
