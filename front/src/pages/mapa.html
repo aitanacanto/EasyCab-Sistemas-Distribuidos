@@ -91,6 +91,10 @@
   <div class="map-container">
     <h1>Mapa en Tiempo Real</h1>
     <div id="map-grid" class="grid"></div>
+    <div id="taxi-status" style="margin-top: 20px;">
+      <h2>Estados de los Taxis</h2>
+      <ul id="taxi-list" style="list-style-type: none; padding: 0;"></ul>
+    </div>
   </div>
 
   <script>
@@ -127,16 +131,26 @@
       const grid = document.getElementById("map-grid");
       grid.innerHTML = "";
 
-      // Intercambiar filas y columnas
       for (let x = 0; x < ANCHO; x++) {
         for (let y = 0; y < ALTO; y++) {
-          const celda = mapa[y][x]; // Intercambiamos el acceso
+          const celda = mapa[y][x];
           const div = document.createElement("div");
           div.className = `cell ${determinarClase(celda)}`;
-          div.textContent = celda !== " " ? celda[0] : ""; // Mostrar el contenido si no es vacío
+          div.textContent = celda !== " " ? celda[0] : ""; 
           grid.appendChild(div);
         }
       }
+    };
+
+    const renderEstadosTaxis = (estados_taxis) => {
+      const list = document.getElementById("taxi-list");
+      list.innerHTML = "";
+
+      estados_taxis.forEach((estado) => {
+        const li = document.createElement("li");
+        li.textContent = `Id: ${estado.id}, Destino: ${estado.destino}, Estado: ${estado.estado}`;
+        list.appendChild(li);
+      });
     };
 
     const fetchMapa = async () => {
@@ -146,11 +160,12 @@
           throw new Error(`Error al obtener el mapa: ${response.status}`);
         }
         const data = await response.json();
-        if (data.mapa) {
+        if (data.mapa && data.estados_taxis) {
           renderMapa(data.mapa);
+          renderEstadosTaxis(data.estados_taxis);
           ajustarTamañoCeldas();
         } else {
-          console.error("Mapa vacío o formato inválido");
+          console.error("Datos inválidos o vacíos");
         }
       } catch (error) {
         console.error("Error al obtener el mapa:", error);
@@ -162,5 +177,6 @@
     window.addEventListener("resize", ajustarTamañoCeldas);
   </script>
 </body>
+
 
 </html>

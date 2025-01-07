@@ -226,7 +226,7 @@ def meterEnMapa(pos_x, pos_y, elemento, estado_taxi):
     mapa[pos_x][pos_y] = elemento
     mapa[1][1] = 'X'
     mapaPygame.actualizar_mapa_pygame(mapa, estado_taxi)
-    EC_API.actualizar_mapa(mapa)
+    EC_API.actualizar_mapa(mapa, estado_taxi)
     
 def envioMuchasPeticiones(peticion, customerXtaxis, peticionesXtaxis, taxi):
     global viajeTerminado, estadoEmergencia
@@ -730,7 +730,7 @@ def cambiarPosicionTaxiMapa(taxi_id, taxi_posicion, antigua_posicion, estado_sen
 
     estado_taxi = leerEstadosDeTaxis(estado_sensor, destino)
     mapaPygame.actualizar_mapa_pygame(mapa, estado_taxi)
-    EC_API.actualizar_mapa(mapa)
+    EC_API.actualizar_mapa(mapa, estado_taxi)
 
 ################## BASE DE DATOS ##################
 
