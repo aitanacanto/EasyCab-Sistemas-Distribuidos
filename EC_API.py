@@ -1,11 +1,12 @@
+# Levan Kipiani, Aitana Cantó
 from flask import Flask, jsonify
 import threading
 from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app)  # Habilitar CORS para todas las rutas
+CORS(app)
 
-# Estado del mapa y taxis
+
 global mapa, estados_taxis
 mapa = [[" " for _ in range(20)] for _ in range(20)]
 estados_taxis = []

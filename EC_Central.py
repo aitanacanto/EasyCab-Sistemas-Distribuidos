@@ -67,7 +67,7 @@ IP_GESTOR = argumentos[2]
 PUERTO_GESTOR = int(argumentos[3])
 IP_CTC = argumentos[4]
 
-estado_trafico = "OK"  # Variable global para el estado del tráfico
+estado_trafico = "OK"  
 
 ARCHIVO_MAPA = 'mapa.txt'
 ARCHIVO_TAXI = 'taxi.txt'
@@ -85,19 +85,19 @@ listaEsperaClientes = []
 
 import logging
 
-# Crea un logger específico para la auditoría
+# logger auditoría
 audit_logger = logging.getLogger("mi_auditoria")
 audit_logger.setLevel(logging.INFO)
 
-# Crea un handler para el archivo de logs
+# handler para el archivo de logs
 file_handler = logging.FileHandler("audit_log.txt")
 file_handler.setLevel(logging.INFO)
 
-# Define el formato que quieras
+
 formatter = logging.Formatter('%(message)s') 
 file_handler.setFormatter(formatter)
 
-# Añade el handler a tu logger
+
 audit_logger.addHandler(file_handler)
 
 logging.getLogger("kafka").setLevel(logging.ERROR)
@@ -107,7 +107,7 @@ EVENTOS_PERMITIDOS = {"Autenticación", "Estado crítico", "Error grave"}
 
 def registrar_evento(origen_ip, accion, detalles):
     if accion not in EVENTOS_PERMITIDOS:
-        return  # Ignorar eventos no permitidos
+        return  
     
     evento = {
         "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -128,7 +128,7 @@ def leer_tokens():
                 taxi_id, token = linea.strip().split(":")
                 tokens[taxi_id] = token
     except FileNotFoundError:
-        pass  # Si el archivo no existe, devuelve un diccionario vacío
+        pass  
     except Exception as e:
         print(f"Error al leer el archivo de tokens: {e}")
     return tokens
@@ -195,13 +195,11 @@ def vueltaBase(taxi_id):
     
     producerTaxi = KafkaProducer(
         bootstrap_servers='localhost:9092',
-        # Ojo, ahora en vez de hacer value_serializer de JSON
-        # lo vamos a mandar en bytes ya cifrados
         value_serializer=lambda v: v
     )
     topic = 'procesar_viaje'
 
-    # Creamos el mensaje en claro
+
     clear_message = {
         'taxi_id': taxi_id,
         'posDestino': (1, 1),
@@ -236,7 +234,6 @@ def envioMuchasPeticiones(peticion, customerXtaxis, peticionesXtaxis, taxi):
     
     for unDestino in peticion:
         if not estadoEmergencia:
-            # Verificar si hay emergencia
             if estadoEmergencia:
                 print(f"Emergencia activada. Taxi {taxi[0]} enviado directamente a la base.")
                 vueltaBase(taxi[0])
@@ -312,8 +309,7 @@ def conexionKafka():
                     hiloSolicitudes.start()
                 else:
                     listaEsperaClientes.append(peticion)
-                    time.sleep(4)                                   # Lo ponemos en la lista de espera y nos esperamos 4 segundos
-                
+                    time.sleep(4)                                 
 
         movimientosTaxi = recibirMensajeTaxi()
         
@@ -355,7 +351,6 @@ def leer_clave_de_fichero(taxi_id):
             for linea in f:
                 partes = linea.strip().split(":")  # ["1", "b'...'"]
                 if partes[0] == taxi_id:
-                    # Convertir clave en formato "b'...'" a bytes reales
                     key_bytes = ast.literal_eval(partes[1])
                     return key_bytes
         print(f"Clave no encontrada para el taxi {taxi_id}.")
@@ -369,9 +364,7 @@ def encrypt_message(message_dict, key_bytes):
     Devuelve bytes cifrados.
     """
     try:
-        # Convertir la clave a objeto Fernet
         f = Fernet(key_bytes)
-        # Convertir el diccionario a JSON y luego a bytes
         message_bytes = json.dumps(message_dict).encode('utf-8')
         # Cifrar
         encrypted_bytes = f.encrypt(message_bytes)
@@ -383,13 +376,12 @@ def encrypt_message(message_dict, key_bytes):
 def enviarMensajeTaxiOrden(taxi_id, destino, letraDestino):
     global estadoEmergencia
     try:
-        # Leer clave del archivo
         key_bytes = leer_clave_de_fichero(taxi_id)
         if not key_bytes:
             print(f"No se pudo obtener la clave para el taxi {taxi_id}.")
             return
 
-        # Crear el mensaje a enviar
+
         message = {
             'taxi_id': taxi_id,
             'posDestino': destino,
@@ -426,7 +418,6 @@ def recibirMensajeTaxi():
     consumer = KafkaConsumer(
         'actualizaciones_taxi',
         bootstrap_servers='localhost:9092',
-        # value_deserializer=None -> Porque vamos a recibir bytes cifrados
         value_deserializer=lambda v: v, 
         auto_offset_reset='earliest', 
         enable_auto_commit=True,        
@@ -466,12 +457,9 @@ def recibirMensajeTaxi():
                         print(f"Error descifrando el mensaje para taxi {taxi_id}: {e}")
                         continue
 
-                    # 3) Ahora ya procesas igual que antes
+
                     print(f"Mensaje descifrado para taxi {taxi_id}: {taxi_status}")
 
-                    # ...
-                    # (El resto sigue igual, usando 'taxi_status.get(...)')
-                    # ...
                     token = taxi_status.get('token')
                     
                     tokens = leer_tokens()
@@ -785,11 +773,11 @@ def actualizarPosicionTaxiFichero(id_taxi, posicion, finalizado, estadoSensor):
         taxiActualizado = False
         nuevasLineas = []
 
-        # Procesar cada línea y actualizar la información del taxi si es necesario
+
         for linea in lineas:
             datos = linea.strip().replace('<', '').split('>')
 
-            # Verificar que la línea tenga al menos 5 elementos
+
             if len(datos) >= 5:
                 taxi_id = datos[2]
                 if taxi_id == str(id_taxi):
@@ -811,7 +799,7 @@ def actualizarPosicionTaxiFichero(id_taxi, posicion, finalizado, estadoSensor):
                 else:
                     nuevasLineas.append(linea)
             else:
-                # Línea no válida, agregar advertencia opcionalmente
+          
                 print(f"Advertencia: línea inválida detectada: {linea.strip()}")
                 nuevasLineas.append(linea)
 
@@ -899,9 +887,8 @@ def encrypt_message(message_dict, key_str):
     Cifra un diccionario (message_dict) con la clave (key_str).
     Devuelve bytes cifrados.
     """
-    # Convertir la clave a objeto Fernet
+
     f = Fernet(key_str)
-    # Convertir el diccionario a JSON y luego a bytes
     message_bytes = json.dumps(message_dict).encode('utf-8')
     # Cifrar
     encrypted_bytes = f.encrypt(message_bytes)
@@ -930,7 +917,7 @@ print("[EMPEZANDO] Servidor inicializando...")
 
 mapaPygame.iniciar_pygame(ANCHO, ALTO)
 
-# Inicia la API en un hilo separado
+
 api_thread = threading.Thread(target=EC_API.iniciar_api, daemon=True)
 api_thread.start()
 

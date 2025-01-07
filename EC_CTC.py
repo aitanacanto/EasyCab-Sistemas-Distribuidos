@@ -1,3 +1,4 @@
+# Levan Kipiani, Aitana Cantó
 from flask import Flask, jsonify                    # type: ignore
 import requests
 import threading

@@ -1,3 +1,4 @@
+# Levan Kipiani, Aitana Cantó
 from flask import Flask, request, jsonify           # type: ignore
 import os
 import logging
