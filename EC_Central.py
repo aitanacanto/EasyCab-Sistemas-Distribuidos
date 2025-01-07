@@ -486,8 +486,9 @@ def recibirMensajeTaxi():
                             taxi_status.get('letra')
                         )
                         peticiones.append(peticion)
-                        destinos[int(taxi_id)] = peticion[4]
+                        estadostabla[int(taxi_id)] = peticion[4]
                         destinos[int(taxi_id)] = peticion[5]
+
                     else:
                         print(f"Token inválido para taxi {taxi_id}. Ignorando mensaje.")
 
@@ -523,7 +524,7 @@ def obtener_lista_ubicaciones(ruta_archivo, lista_letras):
         for destino in lista_ubicaciones:
             if letra == destino[0]:
                 solucion.append(destino)
-                estados_actualizados = leerEstadosDeTaxis(OK, letra)    # Estado, destino
+                estados_actualizados = leerEstadosDeTaxis(OK, letra)
                 meterEnMapa(destino[1], destino[2], destino[0], estados_actualizados)
 
     if lista_ubicaciones:
