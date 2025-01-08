@@ -11,5 +11,6 @@ MarkupSafe==3.0.2
 requests==2.32.3
 urllib3==2.2.3
 Werkzeug==3.1.3
-pygame==2.1.0
+pygame
 cryptography==41.0.3
+flask_cors
