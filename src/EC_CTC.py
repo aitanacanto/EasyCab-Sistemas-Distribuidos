@@ -14,14 +14,14 @@ estado_trafico = "OK"
 
 if len(sys.argv) != 2:
     print("ERROR: Número de argumentos incorrecto")
-    print("Formato correcto -> python3 EC_CTC.py <archivo_APIKEY>")
+    print("Formato correcto -> python3 src/EC_CTC.py <archivo_APIKEY>")
     sys.exit(1)
 
 argumentos = sys.argv
 ARCHIVO_APIKEY = argumentos[1]
 
 # API Key y URL base de OpenWeather
-#API_KEY = "removed"
+#API_KEY = "example"
 
 with open(ARCHIVO_APIKEY, "r") as archivo:
     API_KEY = archivo.readline().strip()

@@ -1,5 +1,41 @@
-/.venv
-taxi.txt
+# Python
+.venv/
+venv/
+entorno/
+myenv/
 __pycache__/
-/entorno/
-/myenv/
+*.py[cod]
+.pytest_cache/
+
+# Frontend
+node_modules/
+dist/
+.astro/
+
+# Credenciales locales
+apikey.txt
+claves.txt
+token.txt
+key.pem
+cert.pem
+*.key
+.env
+.env.*
+!.env.example
+
+# Estado generado y registros
+taxi.txt
+audit_log.txt
+*.log
+
+# Editor y sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Organización local: credenciales y datos de ejecución
+/runtime/
+/secrets/*
+!/secrets/README.md
+!/secrets/apikey.example.txt

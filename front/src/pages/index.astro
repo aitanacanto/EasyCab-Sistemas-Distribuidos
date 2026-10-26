@@ -4,10 +4,7 @@ import Layout from '../layouts/Layout.astro';
 
 <Layout>
   <style>
-    body {
-      display: flex;
-      justify-content: center;
-      align-items: center;
+    :global(body) {
       min-height: 100vh;
       margin: 0;
       background: linear-gradient(to bottom, #1f4037, #99f2c8); /* Gradiente igual al de index.astro */
@@ -47,7 +44,6 @@ import Layout from '../layouts/Layout.astro';
       margin: 10px;
       width: 300px;
       text-align: center;
-      cursor: pointer;
       transition: transform 0.3s, box-shadow 0.3s;
     }
 
@@ -101,12 +97,11 @@ import Layout from '../layouts/Layout.astro';
       right: 10px;
       font-size: 30px;
       color: #000;
-      cursor: pointer;
     }
   </style>
 
   <div class="header">
-    <h1>Sistema de Gestión EasyCab Release</h1>
+    <h1>EasyCab · Gestión de una flota de taxis</h1>
     <p>Autores: Aitana Cantó Rico & Levan Kipiani</p>
   </div>
 
@@ -122,18 +117,15 @@ import Layout from '../layouts/Layout.astro';
     </div>
 
     <div class="card">
-      <h3>Guía de Despligue</h3>
-      <p>Ayuda para desplegar el sistema.</p>
-      <a href="/documents/guia_despliegue.pdf" target="_blank" class="btn">guia_despliegue.pdf</a>
+      <h3>Guía de despliegue original</h3>
+      <p>Documento de la entrega académica. Consulta el README del repositorio para las rutas actuales.</p>
+      <a href="/documents/guia_despliegue.pdf" target="_blank" rel="noopener noreferrer" class="btn">guia_despliegue.pdf</a>
     </div>
 
-    <div class="card">
-      <h3>Documentación</h3>
-      <p>Documentación del sistema.</p>
-    </div>
   </div>
   <iframe
-    src="/mapa.html"
+    title="Mapa de la flota EasyCab"
+    src="/mapa/"
     style="width: 100%; height: 500px; border: none; margin-top: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);"
   ></iframe>
 </Layout>

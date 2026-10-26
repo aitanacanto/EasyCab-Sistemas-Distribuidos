@@ -8,7 +8,7 @@ import time
 # Entradas: IP y Puerto del DigitalEngine
 if len(sys.argv) != 3:
     print("ERROR: Número de argumentos erróneos")    
-    print("Formato correcto -> python3 EC_S.py <IP DigitalEngine> <Puerto DigitalEngine>")
+    print("Formato correcto -> python3 src/EC_S.py <IP DigitalEngine> <Puerto DigitalEngine>")
     exit()
 
 argumentos = sys.argv

@@ -1,3 +1,6 @@
+from ec_paths import (
+    ARCHIVO_TAXI, ARCHIVO_TOKENS, ARCHIVO_CLAVES, ARCHIVO_AUDITORIA,
+)
 from flask import Flask, request, jsonify           # type: ignore
 import os
 import logging
@@ -6,9 +9,6 @@ from datetime import datetime
 app = Flask(__name__)
 
 # Archivo existente de taxis
-ARCHIVO_TAXI = "taxi.txt"
-ARCHIVO_TOKENS = "token.txt"
-ARCHIVO_CLAVES = "claves.txt"
 # Crear el archivo de taxis si no existe
 if not os.path.exists(ARCHIVO_TAXI):
     with open(ARCHIVO_TAXI, "w") as archivo:
@@ -21,7 +21,7 @@ audit_logger = logging.getLogger("mi_auditoria")
 audit_logger.setLevel(logging.INFO)
 
 # Crea un handler para el archivo de logs
-file_handler = logging.FileHandler("audit_log.txt")
+file_handler = logging.FileHandler(ARCHIVO_AUDITORIA)
 file_handler.setLevel(logging.INFO)
 
 # Define el formato que quieras

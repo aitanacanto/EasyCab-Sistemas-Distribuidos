@@ -1,48 +1,36 @@
-# Astro Starter Kit: Basics
+# EasyCab · Interfaz web
 
-```sh
-npm create astro@latest -- --template basics
+Interfaz de visualización de la simulación EasyCab, desarrollada con Astro y React. Consulta el mapa de la central mediante su API Flask.
+
+## Desarrollo
+
+Desde esta carpeta:
+
+```bash
+npm ci
+npm run dev
 ```
 
-[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/github/withastro/astro/tree/latest/examples/basics)
-[![Open with CodeSandbox](https://assets.codesandbox.io/github/button-edit-lime.svg)](https://codesandbox.io/p/sandbox/github/withastro/astro/tree/latest/examples/basics)
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/withastro/astro?devcontainer_path=.devcontainer/basics/devcontainer.json)
+Abre la dirección indicada por Astro. La central debe estar en ejecución y exponer `http://localhost:5003/mapa`. El navegador consulta la API cada 500 ms; si no está disponible, el mapa muestra un aviso de desconexión.
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+## Compilación
 
-![just-the-basics](https://github.com/withastro/astro/assets/2244813/a0a5533c-a856-4198-8470-2d67b1d7c554)
-
-## 🚀 Project Structure
-
-Inside of your Astro project, you'll see the following folders and files:
-
-```text
-/
-├── public/
-│   └── favicon.svg
-├── src/
-│   ├── layouts/
-│   │   └── Layout.astro
-│   └── pages/
-│       └── index.astro
-└── package.json
+```bash
+npm run build
+npm run preview
 ```
 
-To learn more about the folder structure of an Astro project, refer to [our guide on project structure](https://docs.astro.build/en/basics/project-structure/).
+La compilación genera archivos en `dist/`. Publicar esos archivos no pone en marcha la central, Kafka ni los demás procesos Python: el mapa requiere acceso a la API.
 
-## 🧞 Commands
+## Estructura
 
-All commands are run from the root of the project, from a terminal:
+- `src/pages/index.astro`: página principal.
+- `src/pages/mapa.html`: mapa de la simulación, publicado en `/mapa/`.
+- `src/layouts/Layout.astro`: estructura HTML compartida.
+- `public/documents/`: guía original de despliegue.
 
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
+La [guía de ejecución del repositorio](../docs/EJECUCION.md) contiene los comandos actuales de los servicios. El PDF original conserva los comandos de la estructura académica inicial.
 
-## 👀 Want to learn more?
+## Equipo
 
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+Aitana Cantó Rico · Levan Kipiani.

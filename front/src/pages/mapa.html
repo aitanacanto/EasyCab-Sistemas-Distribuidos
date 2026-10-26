@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 
 <head>
   <meta charset="UTF-8">
@@ -44,8 +44,9 @@
       align-content: center;
       background-color: #eaeaea;
       width: 100%;
-      height: calc(100% - 100px);
-      /* Altura ajustada al contenedor menos el título */
+      flex: 1;
+      min-height: 0;
+      /* El mapa ocupa el espacio disponible tras el título y el estado. */
     }
 
     .cell {
@@ -90,6 +91,7 @@
 <body>
   <div class="map-container">
     <h1>Mapa en Tiempo Real</h1>
+    <p id="connection-status" role="status">Conectando con la central…</p>
     <div id="map-grid" class="grid"></div>
   </div>
 
@@ -112,7 +114,7 @@
     };
 
     const determinarClase = (celda) => {
-      if (celda === " ") return "fondo";
+      if (typeof celda !== "string" || !celda.trim()) return "fondo";
       if (celda[0] >= "0" && celda[0] <= "9") {
         if (celda[1] === "r") return "rojo";
         if (celda[1] === "a") return "amarillo";
@@ -141,24 +143,29 @@
 
     const fetchMapa = async () => {
       try {
-        const response = await fetch("http://localhost:5003/mapa");
+        const response = await fetch("http://localhost:5003/mapa", { signal: AbortSignal.timeout(4000) });
         if (!response.ok) {
           throw new Error(`Error al obtener el mapa: ${response.status}`);
         }
         const data = await response.json();
-        if (data.mapa) {
-          renderMapa(data.mapa);
-          ajustarTamañoCeldas();
-        } else {
-          console.error("Mapa vacío o formato inválido");
+        if (!Array.isArray(data.mapa) || data.mapa.length !== ANCHO ||
+            !data.mapa.every(columna => Array.isArray(columna) && columna.length === ALTO &&
+              columna.every(celda => typeof celda === "string"))) {
+          throw new Error("La central ha devuelto un mapa con formato inválido");
         }
+        renderMapa(data.mapa);
+        ajustarTamañoCeldas();
+        document.getElementById("connection-status").textContent = "Conectado · Mapa actualizado";
       } catch (error) {
+        document.getElementById("connection-status").textContent =
+          "Sin conexión con la central. Comprueba que la API esté activa en el puerto 5003.";
         console.error("Error al obtener el mapa:", error);
+      } finally {
+        setTimeout(fetchMapa, 500);
       }
     };
 
     fetchMapa();
-    setInterval(fetchMapa, 500);
     window.addEventListener("resize", ajustarTamañoCeldas);
   </script>
 </body>
