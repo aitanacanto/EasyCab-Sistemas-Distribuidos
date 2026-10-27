@@ -13,7 +13,7 @@ from cryptography.fernet import Fernet
 BASE_URL = "http://localhost:5001"
 
 
-#CLAVE_TAXI = b'example'       # OJO --> Sustituir aquí por la clave buena
+# La clave del taxi se recibe mediante el protocolo de registro.
 CLAVE_TAXI = b''
 
 lock = threading.Lock()

@@ -877,7 +877,7 @@ def leer_clave_de_fichero(taxi_id):
         for linea in f:
             partes = linea.strip().split(":")  # ["1", "b'...'"]
             if partes[0] == taxi_id:
-                # Partes[1] es "b'example'"
+                # Partes[1] contiene la clave serializada como bytes.
                 # lo convertimos a bytes reales
                 key_bytes = ast.literal_eval(partes[1])
                 return key_bytes

@@ -21,7 +21,7 @@ argumentos = sys.argv
 ARCHIVO_APIKEY = argumentos[1]
 
 # API Key y URL base de OpenWeather
-#API_KEY = "example"
+# La clave se lee exclusivamente del archivo local indicado al iniciar.
 
 with open(ARCHIVO_APIKEY, "r") as archivo:
     API_KEY = archivo.readline().strip()

@@ -19,6 +19,9 @@ token.txt
 key.pem
 cert.pem
 *.key
+*.pem
+*.p12
+*.pfx
 .env
 .env.*
 !.env.example
