@@ -8,9 +8,32 @@ EasyCab conecta clientes, taxis y una central de coordinación mediante **Apache
 
 Proyecto académico de **Sistemas Distribuidos**, Universidad de Alicante, curso **2024–2025**.
 
-[Arquitectura](#arquitectura) · [Ejecución local](docs/EJECUCION.md) · [Memoria](docs/memorias/Documentaci%C3%B3n.pdf) · [Equipo](#equipo)
+[Arquitectura](#arquitectura) · [Ejecución local](docs/EJECUCION.md) · [Evolución](#evolución-del-proyecto) · [Memorias](#documentación) · [Equipo](#equipo)
 
 ## El proyecto en imágenes
+
+### Parte 2 · EasyCab Release
+
+<p align="center">
+  <a href="docs/images/web-release.png"><img src="docs/images/web-release.png" width="760" alt="Interfaz web original de EasyCab Release con tarjetas de mapa, seguimiento y documentación" /></a>
+</p>
+
+<table>
+  <tr>
+    <td align="center"><a href="docs/images/mapa-web-release.png"><img src="docs/images/mapa-web-release.png" width="330" alt="Mapa web de EasyCab Release con posiciones de la flota" /></a></td>
+    <td align="center"><a href="docs/images/central-release.png"><img src="docs/images/central-release.png" width="330" alt="Central con mapa, estado del taxi y control de retorno a base" /></a></td>
+  </tr>
+  <tr><td align="center">Visualización web del mapa</td><td align="center">Central y estado de la flota</td></tr>
+  <tr>
+    <td align="center"><a href="docs/images/motor-digital-release.png"><img src="docs/images/motor-digital-release.png" width="350" alt="Ventana del motor digital con confirmación de conexión del taxi" /></a></td>
+    <td align="center"><a href="docs/images/control-meteorologico.png"><img src="docs/images/control-meteorologico.png" width="300" alt="Interfaz del control meteorológico para cambiar la ciudad consultada" /></a></td>
+  </tr>
+  <tr><td align="center">Motor digital del taxi</td><td align="center">Selección de ciudad en EC_CTC</td></tr>
+</table>
+
+Imágenes originales extraídas de la [memoria de la parte 2](docs/memorias/Documentaci%C3%B3nParte-2.pdf), páginas 14, 4, 7 y 10 del PDF. Reflejan la versión académica original, no una nueva ejecución ni el diseño exacto de la web actual.
+
+### Parte 1 · Sistema base
 
 <table>
   <tr>
@@ -23,7 +46,13 @@ Proyecto académico de **Sistemas Distribuidos**, Universidad de Alicante, curso
   </tr>
 </table>
 
-Capturas de la memoria del proyecto elaborada por el equipo.
+Capturas conservadas de la memoria de la parte 1, elaborada por el equipo.
+
+## Evolución del proyecto
+
+La **parte 1** reúne la coordinación de clientes y taxis, la comunicación Kafka/TCP, los sensores y el mapa de escritorio. La **parte 2**, documentada como **«Práctica 3 · EasyCab Release»**, amplía el sistema con control meteorológico, registro de taxis, cifrado, auditoría y una interfaz web conectada a la API del mapa.
+
+Los módulos de esa ampliación ya están incluidos en este repositorio y se describen en la tabla de componentes. La [guía de ejecución](docs/EJECUCION.md) recoge las rutas y la configuración actuales.
 
 ## Funcionalidades
 
@@ -65,7 +94,7 @@ data/
   maps/               Posiciones iniciales del mapa
 docs/
   images/             Capturas
-  memorias/           Memoria del equipo
+  memorias/           Memorias de las partes 1 y 2
   guias/              Guía de despliegue original
   EJECUCION.md        Instrucciones de ejecución
 secrets/              Configuración local y ejemplo sin credenciales
@@ -107,5 +136,6 @@ Proyecto desarrollado conjuntamente en pareja.
 ## Documentación
 
 - [Instrucciones de ejecución](docs/EJECUCION.md).
-- [Memoria del equipo](docs/memorias/Documentaci%C3%B3n.pdf).
+- [Memoria de la parte 1](docs/memorias/Documentaci%C3%B3nPARTE1.pdf).
+- [Memoria de la parte 2 · EasyCab Release](docs/memorias/Documentaci%C3%B3nParte-2.pdf).
 - [Guía original de despliegue](docs/guias/guia_despliegue.pdf). Los comandos de este PDF corresponden a la estructura original; para las rutas actuales, utiliza las instrucciones de ejecución.

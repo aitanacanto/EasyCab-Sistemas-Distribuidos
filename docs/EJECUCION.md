@@ -54,7 +54,7 @@ Registro de taxis:
 python3 src/EC_Registry.py
 ```
 
-Expone la API en `5001`. Usa los mismos archivos de `runtime/` que la central; las rutas se resuelven desde el proyecto.
+Expone `POST /register_taxi` y `POST /unregister_taxi` en el puerto `5001`. Usa los mismos archivos de `runtime/` que la central; las rutas se resuelven desde el proyecto.
 
 Central:
 
@@ -125,3 +125,10 @@ Un despliegue en varios equipos requiere revisar direcciones, archivos compartid
 Los JSON de peticiones están en `data/requests/`, los destinos en `data/locations/` y el mapa inicial en `data/maps/`. Los archivos generados de taxis, tokens, claves y auditoría se guardan en `runtime/`, creada automáticamente al cargar las rutas compartidas. Las credenciales locales se conservan en `secrets/`. Usa credenciales propias y conserva esta configuración local fuera del control de versiones.
 
 Los PDF originales se conservan sin modificar en `docs/`; sus comandos pueden usar las rutas anteriores.
+## Memorias y organización actual
+
+Las memorias de la [parte 1](memorias/Documentaci%C3%B3nPARTE1.pdf) y la [parte 2 · EasyCab Release](memorias/Documentaci%C3%B3nParte-2.pdf) conservan la estructura y los comandos del proyecto académico original. Para ejecutarlo, utiliza las rutas de esta guía: módulos en `src/`, ejemplos en `data/`, estado generado en `runtime/` y configuración local en `secrets/`.
+
+La parte 2 incorpora el control meteorológico, el registro de taxis, el cifrado Fernet, la auditoría y la API utilizada por la web. Estos componentes están presentes en el código; esta revisión documental no equivale a una nueva ejecución integral de todos sus servicios ni valida por completo los flujos de seguridad.
+
+La central inicia la API del mapa en un hilo, por lo que no es necesario ejecutar `EC_API.py` por separado. La portada web carga `/mapa/` en un iframe; la referencia histórica a `/mapa.html` corresponde al archivo fuente. Consulta el [README del frontend](../front/README.md) para sus detalles.

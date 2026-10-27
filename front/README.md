@@ -1,6 +1,6 @@
 # EasyCab · Interfaz web
 
-Interfaz de visualización de la simulación EasyCab, desarrollada con Astro y React. Consulta el mapa de la central mediante su API Flask.
+Interfaz de visualización de la simulación EasyCab, incorporada en la parte 2. La portada utiliza Astro y el mapa se actualiza mediante JavaScript consultando la API Flask de la central. React figura entre las dependencias, aunque esta copia no contiene el componente `RealTimeMap` mencionado en la memoria.
 
 ## Desarrollo
 
@@ -34,3 +34,9 @@ La [guía de ejecución del repositorio](../docs/EJECUCION.md) contiene los coma
 ## Equipo
 
 Aitana Cantó Rico · Levan Kipiani.
+
+## Memoria y versión actual
+
+La [memoria de la parte 2 · EasyCab Release](../docs/memorias/Documentaci%C3%B3nParte-2.pdf) describe la interfaz original. Sus capturas están incluidas en el [README principal](../README.md#el-proyecto-en-imágenes) y pueden diferir de la presentación actual.
+
+La portada carga el mapa en un iframe con la ruta `/mapa/`; la memoria utiliza `/mapa.html`. El seguimiento se realiza en ese mapa: las tarjetas de la portada no constituyen un panel independiente de administración. El componente React `RealTimeMap` mencionado en la memoria no está presente en esta copia.
